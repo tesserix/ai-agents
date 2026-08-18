@@ -1,0 +1,34 @@
+apiVersion: registry.agentic.dev/v1alpha1
+kind: Agent
+metadata:
+  name: meal-planner
+  namespace: kora
+  tenantId: kora
+  tag: 1.0.0
+  visibility: internal
+  labels:
+    app.kubernetes.io/part-of: kora
+    ai.tesserix.dev/runtime: tesserix-adk
+spec:
+  title: Kora Meal Planner
+  description: Creates bounded, practical meal plans from stated preferences.
+  model:
+    provider: solo-agentgateway
+    name: kora-auto
+  a2a:
+    url: http://kora-ai-agents.kora.svc.cluster.local:8080/a2a/v1/meal-planner
+    preferredTransport: JSONRPC
+    provider:
+      organization: Tesserix
+      url: https://tesserix.app
+    capabilities:
+      streaming: false
+      pushNotifications: false
+    defaultInputModes: [application/json, text/plain]
+    defaultOutputModes: [application/json]
+  skills:
+    - id: plan-meals
+      name: Plan Meals
+      description: Produces up to seven days of meals in a validated structure.
+      tags: [meal-planning, nutrition, structured-output]
+

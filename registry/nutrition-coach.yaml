@@ -1,0 +1,33 @@
+apiVersion: registry.agentic.dev/v1alpha1
+kind: Agent
+metadata:
+  name: nutrition-coach
+  namespace: kora
+  tenantId: kora
+  tag: 1.0.0
+  visibility: internal
+  labels:
+    app.kubernetes.io/part-of: kora
+    ai.tesserix.dev/runtime: tesserix-adk
+spec:
+  title: Kora Nutrition Coach
+  description: Gives concise, general nutrition guidance with medical safety boundaries.
+  model:
+    provider: solo-agentgateway
+    name: kora-auto
+  a2a:
+    url: http://kora-ai-agents.kora.svc.cluster.local:8080/a2a/v1/nutrition-coach
+    preferredTransport: JSONRPC
+    provider:
+      organization: Tesserix
+      url: https://tesserix.app
+    capabilities:
+      streaming: false
+      pushNotifications: false
+    defaultInputModes: [application/json, text/plain]
+    defaultOutputModes: [text/plain]
+  skills:
+    - id: nutrition-guidance
+      name: Nutrition Guidance
+      description: Answers general nutrition questions without diagnosis or dosage advice.
+      tags: [nutrition, coaching, safety]
