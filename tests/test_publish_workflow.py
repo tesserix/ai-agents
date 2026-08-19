@@ -24,6 +24,13 @@ def test_registry_publish_preserves_http_response_for_diagnostics() -> None:
     assert 'cat "${response_file}" >&2' in workflow
 
 
+def test_registry_publish_identifies_machine_client_to_cloudflare() -> None:
+    workflow = PUBLISH_WORKFLOW.read_text()
+
+    assert "User-Agent: Tesserix-Agent-Publisher/1.0" in workflow
+    assert '-H "Accept: application/json"' in workflow
+
+
 def test_registry_publish_rejects_partial_multistatus_failures() -> None:
     workflow = PUBLISH_WORKFLOW.read_text()
 
