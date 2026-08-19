@@ -66,7 +66,7 @@ jobs:
           for manifest in registry/*.yaml; do
             status=$(curl --fail --silent --show-error \
               --retry 3 --retry-all-errors --max-time 30 \
-              -H "Authorization: Bearer ${REGISTRY_DEPLOY_KEY}" \
+              -H "X-Agentic-Registry-Deploy-Key: ${REGISTRY_DEPLOY_KEY}" \
               -H "Content-Type: application/yaml" \
               --data-binary "@${manifest}" \
               --output /tmp/registry-response \
