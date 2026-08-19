@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import yaml
+
 PUBLISH_WORKFLOW = Path(__file__).parents[1] / ".github" / "workflows" / "publish.yml"
 
 
@@ -37,3 +39,26 @@ def test_registry_publish_rejects_partial_multistatus_failures() -> None:
     assert "200) ;;" in workflow
     assert "207)" in workflow
     assert 'jq -e \'all(.applied[]?; (.error // "") == "")\'' in workflow
+
+
+def test_registry_publish_uses_repository_bound_oidc_route():
+    workflow = yaml.safe_load(
+        (Path(__file__).resolve().parents[1] / ".github/workflows/publish.yml").read_text()
+    )
+    job = workflow["jobs"]["registry"]
+
+    assert job["permissions"] == {"contents": "read", "id-token": "write"}
+    publish = next(
+        step for step in job["steps"] if step.get("name") == "Publish reviewed Agent manifests"
+    )
+    assert publish["env"]["REGISTRY_PUBLISH_URL"] == (
+        "https://publish.aregistry.tesserix.app/v0/apply"
+    )
+
+    script = publish["run"]
+    assert "ACTIONS_ID_TOKEN_REQUEST_URL" in script
+    assert "ACTIONS_ID_TOKEN_REQUEST_TOKEN" in script
+    assert "audience=agentregistry-publisher.tesserix.app" in script
+    assert "X-GitHub-OIDC-Token: Bearer ${github_oidc_token}" in script
+    assert '"${REGISTRY_PUBLISH_URL}"' in script
+    assert "https://aregistry.tesserix.app/v0/apply" not in script
