@@ -52,6 +52,9 @@ jobs:
 
   registry:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -61,25 +64,31 @@ jobs:
       - name: Publish reviewed Agent manifests
         env:
           REGISTRY_DEPLOY_KEY: ${{ secrets.AGENTIC_REGISTRY_DEPLOY_KEY }}
+          REGISTRY_PUBLISH_URL: https://publish.aregistry.tesserix.app/v0/apply
         run: |
           set -euo pipefail
           if ! [[ "${REGISTRY_DEPLOY_KEY}" =~ ^[[:xdigit:]]{64}$ ]]; then
             echo "registry deploy key must be a 64-character hexadecimal value" >&2
             exit 1
           fi
+          oidc_response=$(curl --silent --show-error --fail-with-body \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=agentregistry-publisher.tesserix.app")
+          github_oidc_token=$(jq -er '.value' <<<"${oidc_response}")
           response_file=$(mktemp)
-          trap 'rm -f "${response_file}"' EXIT
+          trap 'unset github_oidc_token oidc_response; rm -f "${response_file}"' EXIT
           for manifest in registry/*.yaml; do
             status=$(curl --silent --show-error \
               --retry 3 --retry-all-errors --max-time 30 \
               -H "User-Agent: Tesserix-Agent-Publisher/1.0 (+https://github.com/tesserix/ai-agents)" \
               -H "Accept: application/json" \
+              -H "X-GitHub-OIDC-Token: Bearer ${github_oidc_token}" \
               -H "X-Agentic-Registry-Deploy-Key: ${REGISTRY_DEPLOY_KEY}" \
               -H "Content-Type: application/yaml" \
               --data-binary "@${manifest}" \
               --output "${response_file}" \
               --write-out '%{http_code}' \
-              https://aregistry.tesserix.app/v0/apply)
+              "${REGISTRY_PUBLISH_URL}")
             case "${status}" in
               200) ;;
               207)
