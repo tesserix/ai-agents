@@ -64,7 +64,7 @@ jobs:
       - name: Publish reviewed Agent manifests
         env:
           REGISTRY_DEPLOY_KEY: ${{ secrets.AGENTIC_REGISTRY_DEPLOY_KEY }}
-          REGISTRY_PUBLISH_URL: https://publish.aregistry.tesserix.app/v0/apply
+          REGISTRY_PUBLISH_URL: https://publish-aregistry.tesserix.app/v0/apply
         run: |
           set -euo pipefail
           if ! [[ "${REGISTRY_DEPLOY_KEY}" =~ ^[[:xdigit:]]{64}$ ]]; then
