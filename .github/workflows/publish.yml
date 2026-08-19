@@ -63,17 +63,36 @@ jobs:
           REGISTRY_DEPLOY_KEY: ${{ secrets.AGENTIC_REGISTRY_DEPLOY_KEY }}
         run: |
           set -euo pipefail
+          if ! [[ "${REGISTRY_DEPLOY_KEY}" =~ ^[[:xdigit:]]{64}$ ]]; then
+            echo "registry deploy key must be a 64-character hexadecimal value" >&2
+            exit 1
+          fi
+          response_file=$(mktemp)
+          trap 'rm -f "${response_file}"' EXIT
           for manifest in registry/*.yaml; do
-            status=$(curl --fail --silent --show-error \
+            status=$(curl --silent --show-error \
               --retry 3 --retry-all-errors --max-time 30 \
               -H "X-Agentic-Registry-Deploy-Key: ${REGISTRY_DEPLOY_KEY}" \
               -H "Content-Type: application/yaml" \
               --data-binary "@${manifest}" \
-              --output /tmp/registry-response \
+              --output "${response_file}" \
               --write-out '%{http_code}' \
               https://aregistry.tesserix.app/v0/apply)
             case "${status}" in
-              200|207) ;;
-              *) echo "registry publish failed with HTTP ${status}" >&2; exit 1 ;;
+              200) ;;
+              207)
+                if ! jq -e 'all(.applied[]?; (.error // "") == "")' \
+                  "${response_file}" >/dev/null; then
+                  echo "registry partially rejected ${manifest}" >&2
+                  jq -c '{errors: [.applied[]? | select((.error // "") != "") | {kind, name, namespace, error}]}' \
+                    "${response_file}" >&2
+                  exit 1
+                fi
+                ;;
+              *)
+                echo "registry publish failed for ${manifest} with HTTP ${status}" >&2
+                cat "${response_file}" >&2
+                exit 1
+                ;;
             esac
           done
