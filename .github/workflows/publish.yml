@@ -72,6 +72,8 @@ jobs:
           for manifest in registry/*.yaml; do
             status=$(curl --silent --show-error \
               --retry 3 --retry-all-errors --max-time 30 \
+              -H "User-Agent: Tesserix-Agent-Publisher/1.0 (+https://github.com/tesserix/ai-agents)" \
+              -H "Accept: application/json" \
               -H "X-Agentic-Registry-Deploy-Key: ${REGISTRY_DEPLOY_KEY}" \
               -H "Content-Type: application/yaml" \
               --data-binary "@${manifest}" \
