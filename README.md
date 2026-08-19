@@ -25,7 +25,9 @@ All settings use the `KORA_AGENTS_` prefix:
 
 Raw keys belong in GitHub Actions or GCP Secret Manager, never in Git. Registry
 publishing uses `AGENTIC_REGISTRY_DEPLOY_KEY`; the registry stores only its
-SHA-256 digest and limits it to the `kora` tenant.
+SHA-256 digest and limits it to the `kora` tenant. The publish workflow sends
+the opaque key in `X-Agentic-Registry-Deploy-Key`; `Authorization` is reserved
+for JWTs validated by the service mesh.
 
 ## Development
 
@@ -41,4 +43,3 @@ uv build
 The container runs as UID/GID 65532 with a read-only-compatible filesystem.
 Kubernetes deployment is owned by `tesserix-k8s`; this repository publishes the
 image and the Agentic Registry manifests, but makes no imperative cluster change.
-
