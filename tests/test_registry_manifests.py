@@ -17,7 +17,7 @@ def test_registry_manifests_are_tenant_scoped_a2a_agents() -> None:
         assert manifest["kind"] == "Agent"
         assert manifest["metadata"]["namespace"] == "kora"
         assert manifest["metadata"]["tenantId"] == "kora"
-        assert manifest["metadata"]["visibility"] == "internal"
+        assert manifest["metadata"]["visibility"] == "public"
         assert manifest["spec"]["a2a"]["preferredTransport"] == "JSONRPC"
         assert manifest["spec"]["a2a"]["url"].startswith(
             "http://kora-ai-agents.kora.svc.cluster.local:8080/a2a/v1/"
