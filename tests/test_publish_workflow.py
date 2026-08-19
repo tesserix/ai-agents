@@ -52,7 +52,7 @@ def test_registry_publish_uses_repository_bound_oidc_route():
         step for step in job["steps"] if step.get("name") == "Publish reviewed Agent manifests"
     )
     assert publish["env"]["REGISTRY_PUBLISH_URL"] == (
-        "https://publish.aregistry.tesserix.app/v0/apply"
+        "https://publish-aregistry.tesserix.app/v0/apply"
     )
 
     script = publish["run"]
