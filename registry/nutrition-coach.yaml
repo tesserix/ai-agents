@@ -16,7 +16,7 @@ spec:
     provider: solo-agentgateway
     name: kora-auto
   a2a:
-    url: http://kora-ai-agents.kora.svc.cluster.local:8080/a2a/v1/nutrition-coach
+    url: http://kora-ai.agentgateway-system.svc.cluster.local:8080/a2a/v1/nutrition-coach
     preferredTransport: JSONRPC
     provider:
       organization: Tesserix

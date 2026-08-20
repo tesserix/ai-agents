@@ -47,6 +47,11 @@ _BUDGET = BudgetLimits(
     max_seconds=20.0,
 )
 _GUARDRAILS = ("pii", "injection", "medical_safety")
+_SUPERVISOR_GROUNDING = (
+    " When a supervisor request contains CONTEXT and QUESTION sections, treat CONTEXT as "
+    "trusted application facts and answer the QUESTION only from those facts. Never invent a "
+    "number absent from CONTEXT; say when the supplied context does not contain the answer."
+)
 
 
 def _definition(agent: Agent[Any]) -> AgentDefinition[Any]:
@@ -67,6 +72,7 @@ DEFINITIONS: dict[str, AgentDefinition[Any]] = {
                 "Create a practical meal plan from the user's stated preferences. "
                 "Do not diagnose disease, prescribe treatment, or invent allergies. "
                 "Keep recommendations varied, affordable, and explicit about uncertainty."
+                + _SUPERVISOR_GROUNDING
             ),
             model="kora-auto",
             output_type=MealPlan,
@@ -83,7 +89,7 @@ DEFINITIONS: dict[str, AgentDefinition[Any]] = {
                 "Give concise, evidence-aware general nutrition guidance. "
                 "Never diagnose, prescribe medication or supplements, or replace a clinician. "
                 "For pregnancy, eating disorders, severe symptoms, or medication interactions, "
-                "recommend an appropriately qualified health professional."
+                "recommend an appropriately qualified health professional." + _SUPERVISOR_GROUNDING
             ),
             model="kora-auto",
             free_text=True,

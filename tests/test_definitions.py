@@ -20,6 +20,8 @@ def test_agents_are_reviewable_bounded_adk_definitions() -> None:
         assert agent.budget.max_output_tokens == 2_000
         assert agent.budget.max_model_calls == 2
         assert agent.guardrails == ("pii", "injection", "medical_safety")
+        assert "CONTEXT" in agent.instructions
+        assert "Never invent a number absent from CONTEXT" in agent.instructions
 
     assert DEFINITIONS["meal-planner"].agent.output_type is MealPlan
     assert DEFINITIONS["nutrition-coach"].agent.free_text is True

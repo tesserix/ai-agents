@@ -38,6 +38,23 @@ async def test_runtime_executes_real_adk_definition() -> None:
     assert result.output == "Choose whole grains."
 
 
+async def test_runtime_accepts_server_owned_supervisor_context() -> None:
+    service = RuntimeAgentService(
+        definitions=DEFINITIONS,
+        providers=StaticProviderFactory(provider(ModelResponse(content="Add beans at lunch."))),
+    )
+    prompt = (
+        "SUPERVISOR REQUIREMENTS:\nUse only the supplied facts. Never invent a number.\n\n"
+        "CONTEXT:\nDaily protein target: 120 g\n\n"
+        "QUESTION: How can I improve lunch?"
+    )
+
+    result = await service.run("nutrition-coach", prompt, tenant="kora")
+
+    assert result.state == "completed"
+    assert result.output == "Add beans at lunch."
+
+
 async def test_runtime_validates_structured_meal_plan() -> None:
     answered = ModelResponse(
         content=(
