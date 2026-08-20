@@ -146,6 +146,12 @@ def test_a2a_message_send_uses_same_guarded_execution_path() -> None:
     assert body["id"] == "message-1"
     assert body["result"]["id"] == "run-1"
     assert body["result"]["status"]["state"] == "completed"
+    assert body["result"]["metadata"]["usage"] == {
+        "input_tokens": 42,
+        "output_tokens": 7,
+        "cached_tokens": 10,
+        "estimated": False,
+    }
 
 
 def test_configured_prompt_limit_applies_to_a2a_joined_parts() -> None:

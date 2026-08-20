@@ -219,6 +219,14 @@ def create_app(
                 "id": result.run_id,
                 "status": {"state": result.state},
                 "artifacts": [{"parts": [{"kind": "text", "text": output}]}],
+                "metadata": {
+                    "usage": {
+                        "input_tokens": result.input_tokens,
+                        "output_tokens": result.output_tokens,
+                        "cached_tokens": result.cached_tokens,
+                        "estimated": result.estimated,
+                    }
+                },
             },
         }
 
