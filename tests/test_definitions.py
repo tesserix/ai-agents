@@ -1,13 +1,11 @@
 from pathlib import Path
 
 import pytest
-from tesserix_adk import __version__ as adk_version
 
 from kora_agents.definitions import DEFINITIONS, MealPlan
 
 
 def test_agents_are_reviewable_bounded_adk_definitions() -> None:
-    assert adk_version == "0.50.0"
     assert set(DEFINITIONS) == {"meal-planner", "nutrition-coach"}
 
     for definition in DEFINITIONS.values():

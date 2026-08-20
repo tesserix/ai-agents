@@ -1,7 +1,10 @@
 # Kora AI Agents
 
-Kora's deployable AI agents, built on `tesserix-adk` 0.48.0 and routed only
-through the Solo Agent Gateway. The service currently publishes:
+Kora's deployable AI agents, built on `tesserix-adk` and routed only through the
+Solo Agent Gateway. The ADK is not a declared dependency: it comes preinstalled
+in `/opt/adk-venv` from `ghcr.io/tesserix/base-python-adk-3.13`, which pins the
+newest reviewed ADK release, so build and CI both run against that one version.
+The service currently publishes:
 
 - `nutrition-coach`: bounded free-text nutrition guidance;
 - `meal-planner`: validated structured meal plans of at most seven days.
