@@ -21,7 +21,7 @@ def test_ci_verifies_inside_the_adk_base_image() -> None:
     job = _verify_job()
     commands = [step["run"] for step in job["steps"] if "run" in step]
 
-    assert job["container"].startswith(ADK_BASE)
+    assert job["container"]["image"].startswith(ADK_BASE)
     assert job["env"]["UV_PROJECT_ENVIRONMENT"] == "/opt/adk-venv"
     # Without --inexact the sync prunes the ADK, which the lock deliberately omits.
     assert any(command.startswith("uv sync ") and "--inexact" in command for command in commands)
