@@ -2,13 +2,26 @@ from pathlib import Path
 
 import yaml
 
+ADK_BASE = "ghcr.io/tesserix/base-python-adk-3.13:"
+
+
+def _verify_job() -> dict:
+    return yaml.safe_load(Path(".github/workflows/ci.yml").read_text())["jobs"]["verify"]
+
 
 def test_ci_runs_from_the_environment_created_by_frozen_sync() -> None:
-    workflow = yaml.safe_load(Path(".github/workflows/ci.yml").read_text())
-    commands = [step["run"] for step in workflow["jobs"]["verify"]["steps"] if "run" in step]
+    commands = [step["run"] for step in _verify_job()["steps"] if "run" in step]
     verification_commands = [command for command in commands if command.startswith("uv run ")]
 
     assert verification_commands
-    assert all(
-        command.startswith("uv run --offline --frozen ") for command in verification_commands
-    )
+    assert all(command.startswith("uv run --no-sync ") for command in verification_commands)
+
+
+def test_ci_verifies_inside_the_adk_base_image() -> None:
+    job = _verify_job()
+    commands = [step["run"] for step in job["steps"] if "run" in step]
+
+    assert job["container"].startswith(ADK_BASE)
+    assert job["env"]["UV_PROJECT_ENVIRONMENT"] == "/opt/adk-venv"
+    # Without --inexact the sync prunes the ADK, which the lock deliberately omits.
+    assert any(command.startswith("uv sync ") and "--inexact" in command for command in commands)
