@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 from tesserix_adk import __version__ as adk_version
 
 from kora_agents.definitions import DEFINITIONS, MealPlan
@@ -42,3 +43,35 @@ def test_meal_plan_rejects_unbounded_days() -> None:
         pass
     else:
         raise AssertionError("meal plans must be limited to seven days")
+
+
+def test_meal_plan_accepts_display_day_labels() -> None:
+    meal_plan = MealPlan.model_validate(
+        {
+            "summary": "Plan",
+            "days": [
+                {
+                    "date": "Day 1",
+                    "meals": [{"name": "Breakfast", "description": "Oats"}],
+                }
+            ],
+        }
+    )
+
+    assert meal_plan.days[0].date == "Day 1"
+
+
+@pytest.mark.parametrize("label", ["", "x" * 41], ids=["empty", "overlong"])
+def test_meal_plan_rejects_invalid_display_day_labels(label: str) -> None:
+    with pytest.raises(ValueError):
+        MealPlan.model_validate(
+            {
+                "summary": "Plan",
+                "days": [
+                    {
+                        "date": label,
+                        "meals": [{"name": "Breakfast", "description": "Oats"}],
+                    }
+                ],
+            }
+        )

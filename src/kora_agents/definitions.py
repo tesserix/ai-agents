@@ -1,6 +1,5 @@
 """Reviewable Kora agent definitions."""
 
-from datetime import date
 from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,7 +20,7 @@ class DayPlan(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    date: date
+    date: str = Field(min_length=1, max_length=40)
     meals: Annotated[list[Meal], Field(min_length=1, max_length=6)]
 
 
