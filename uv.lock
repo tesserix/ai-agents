@@ -268,7 +268,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.11,<3" },
     { name = "pydantic-settings", specifier = ">=2.10,<3" },
     { name = "structlog", specifier = ">=25.4,<26" },
-    { name = "tesserix-adk", url = "https://github.com/tesserix/agent-development-kit/releases/download/v0.48.0/tesserix_adk-0.48.0-py3-none-any.whl" },
+    { name = "tesserix-adk", url = "https://github.com/tesserix/agent-development-kit/releases/download/v0.50.0/tesserix_adk-0.50.0-py3-none-any.whl" },
     { name = "uvicorn", specifier = ">=0.35,<1" },
 ]
 
@@ -735,8 +735,8 @@ wheels = [
 
 [[package]]
 name = "tesserix-adk"
-version = "0.48.0"
-source = { url = "https://github.com/tesserix/agent-development-kit/releases/download/v0.48.0/tesserix_adk-0.48.0-py3-none-any.whl" }
+version = "0.50.0"
+source = { url = "https://github.com/tesserix/agent-development-kit/releases/download/v0.50.0/tesserix_adk-0.50.0-py3-none-any.whl" }
 dependencies = [
     { name = "httpx" },
     { name = "opentelemetry-api" },
@@ -744,7 +744,7 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 wheels = [
-    { url = "https://github.com/tesserix/agent-development-kit/releases/download/v0.48.0/tesserix_adk-0.48.0-py3-none-any.whl", hash = "sha256:5c5d8bacb966232e477d05f1a3391375e96e371325fad42e222fb347c14f7f06" },
+    { url = "https://github.com/tesserix/agent-development-kit/releases/download/v0.50.0/tesserix_adk-0.50.0-py3-none-any.whl", hash = "sha256:369af30c5d01dec4473705078ebc2cec2e1a679d8ed16e14ace52e94e03f0e6f" },
 ]
 
 [package.metadata]
@@ -752,6 +752,8 @@ requires-dist = [
     { name = "graphiti-core", marker = "extra == 'all'", specifier = ">=0.14,<1" },
     { name = "graphiti-core", marker = "extra == 'graphiti'", specifier = ">=0.14,<1" },
     { name = "httpx", specifier = ">=0.27" },
+    { name = "jsonschema", marker = "extra == 'all'", specifier = ">=4.23" },
+    { name = "jsonschema", marker = "extra == 'mcp'", specifier = ">=4.23" },
     { name = "mcp", marker = "extra == 'all'", specifier = ">=1.9" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.9" },
     { name = "opentelemetry-api", specifier = ">=1.27" },
