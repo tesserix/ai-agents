@@ -9,7 +9,7 @@ dependencies = [
   "pydantic>=2.11,<3",
   "pydantic-settings>=2.10,<3",
   "structlog>=25.4,<26",
-  "tesserix-adk @ https://github.com/tesserix/agent-development-kit/releases/download/v0.48.0/tesserix_adk-0.48.0-py3-none-any.whl#sha256=5c5d8bacb966232e477d05f1a3391375e96e371325fad42e222fb347c14f7f06",
+  "tesserix-adk @ https://github.com/tesserix/agent-development-kit/releases/download/v0.50.0/tesserix_adk-0.50.0-py3-none-any.whl#sha256=369af30c5d01dec4473705078ebc2cec2e1a679d8ed16e14ace52e94e03f0e6f",
   "uvicorn>=0.35,<1",
 ]
 
