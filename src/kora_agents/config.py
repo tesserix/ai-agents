@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     gateway_model: str = "kora-auto"
     tenant_id: str = "kora"
     max_prompt_chars: int = Field(default=12_000, ge=1, le=50_000)
-    request_timeout_seconds: float = Field(default=20.0, gt=0, le=60)
+    request_timeout_seconds: float = Field(default=45.0, gt=0, le=60)
 
     def __repr__(self) -> str:
         """Keep both service credentials out of logs and tracebacks."""
