@@ -22,6 +22,9 @@ def test_agents_are_reviewable_bounded_adk_definitions() -> None:
         assert "CONTEXT" in agent.instructions
         assert "Never invent a number absent from CONTEXT" in agent.instructions
 
+    assert DEFINITIONS["meal-planner"].agent.budget.max_seconds == 20.0
+    assert DEFINITIONS["nutrition-coach"].agent.budget.max_seconds == 45.0
+
     assert DEFINITIONS["meal-planner"].agent.output_type is MealPlan
     assert DEFINITIONS["nutrition-coach"].agent.free_text is True
 

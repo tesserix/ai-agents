@@ -38,13 +38,14 @@ _OWNER = Owner(
     contact="https://github.com/tesserix/ai-agents/issues",
     service="kora-ai-agents",
 )
-_BUDGET = BudgetLimits(
+_BASE_BUDGET = BudgetLimits(
     max_input_tokens=12_000,
     max_output_tokens=2_000,
     max_model_calls=2,
     max_iterations=2,
     max_seconds=20.0,
 )
+_COACH_BUDGET = _BASE_BUDGET.model_copy(update={"max_seconds": 45.0})
 _GUARDRAILS = ("pii", "injection", "medical_safety")
 _SUPERVISOR_GROUNDING = (
     " When a supervisor request contains CONTEXT and QUESTION sections, treat CONTEXT as "
@@ -75,7 +76,7 @@ DEFINITIONS: dict[str, AgentDefinition[Any]] = {
             ),
             model="kora-auto",
             output_type=MealPlan,
-            budget=_BUDGET,
+            budget=_BASE_BUDGET,
             guardrails=_GUARDRAILS,
             metadata={"capability": "json", "context_kind": "structured"},
         )
@@ -92,7 +93,7 @@ DEFINITIONS: dict[str, AgentDefinition[Any]] = {
             ),
             model="kora-auto",
             free_text=True,
-            budget=_BUDGET,
+            budget=_COACH_BUDGET,
             guardrails=_GUARDRAILS,
             metadata={"capability": "text", "context_kind": "conversation"},
         )
