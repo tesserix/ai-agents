@@ -4,7 +4,7 @@ metadata:
   name: meal-planner
   namespace: kora
   tenantId: kora
-  tag: 1.0.1
+  tag: 1.0.2
   visibility: public
   labels:
     app.kubernetes.io/part-of: kora
@@ -29,5 +29,5 @@ spec:
   skills:
     - id: plan-meals
       name: Plan Meals
-      description: Produces up to seven days of meals in a validated structure.
-      tags: [meal-planning, nutrition, structured-output]
+      description: Produces up to 62 days (two calendar months) and 1-6 meals per day with preparation guidance grounded in verified user preferences and reviewed country nutrition references.
+      tags: [meal-planning, nutrition, grounded-data, structured-output]

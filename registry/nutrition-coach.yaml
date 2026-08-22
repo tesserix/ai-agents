@@ -4,7 +4,7 @@ metadata:
   name: nutrition-coach
   namespace: kora
   tenantId: kora
-  tag: 1.0.1
+  tag: 1.0.2
   visibility: public
   labels:
     app.kubernetes.io/part-of: kora
@@ -29,5 +29,5 @@ spec:
   skills:
     - id: nutrition-guidance
       name: Nutrition Guidance
-      description: Answers general nutrition questions without diagnosis or dosage advice.
-      tags: [nutrition, coaching, safety]
+      description: Answers general nutrition questions from grounded user context and reviewed country food-composition facts without diagnosis or dosage advice.
+      tags: [nutrition, coaching, grounded-data, safety]

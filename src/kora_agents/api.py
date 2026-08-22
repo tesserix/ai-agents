@@ -17,6 +17,7 @@ from starlette.responses import Response
 
 from kora_agents.config import Settings
 from kora_agents.execution import AgentService, ExecutionResult
+from kora_agents.identity import DELEGATED_IDENTITY_HEADER, delegated_end_user_token
 from kora_agents.runtime import AgentNotFoundError, ExecutionFailedError
 
 
@@ -206,18 +207,34 @@ def create_app(
         response_model=RunResponse,
         dependencies=[Depends(authenticate)],
     )
-    async def run_agent(agent_name: str, body: RunRequest) -> RunResponse:
+    async def run_agent(
+        agent_name: str,
+        body: RunRequest,
+        end_user_token: Annotated[
+            str | None,
+            Header(alias=DELEGATED_IDENTITY_HEADER, max_length=8192),
+        ] = None,
+    ) -> RunResponse:
         if len(body.prompt) > settings.max_prompt_chars:
             raise HTTPException(status_code=422, detail="prompt exceeds configured limit")
-        result = await service.run(agent_name, body.prompt, tenant=settings.tenant_id)
+        with delegated_end_user_token(end_user_token):
+            result = await service.run(agent_name, body.prompt, tenant=settings.tenant_id)
         return _response(result)
 
     @app.post("/a2a/v1/{agent_name}", dependencies=[Depends(authenticate)])
-    async def a2a(agent_name: str, body: A2ARequest) -> dict[str, object]:
+    async def a2a(
+        agent_name: str,
+        body: A2ARequest,
+        end_user_token: Annotated[
+            str | None,
+            Header(alias=DELEGATED_IDENTITY_HEADER, max_length=8192),
+        ] = None,
+    ) -> dict[str, object]:
         prompt = "\n".join(part.text for part in body.params.message.parts)
         if len(prompt) > settings.max_prompt_chars:
             raise HTTPException(status_code=422, detail="prompt exceeds configured limit")
-        result = await service.run(agent_name, prompt, tenant=settings.tenant_id)
+        with delegated_end_user_token(end_user_token):
+            result = await service.run(agent_name, prompt, tenant=settings.tenant_id)
         output = result.output if isinstance(result.output, str) else json.dumps(result.output)
         return {
             "jsonrpc": "2.0",

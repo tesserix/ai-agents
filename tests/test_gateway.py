@@ -3,6 +3,7 @@ import httpx
 from kora_agents.config import Settings
 from kora_agents.definitions import DEFINITIONS
 from kora_agents.gateway import GatewayHeadersTransport, GatewayProviderFactory
+from kora_agents.identity import delegated_end_user_token
 
 
 class RecordingTransport(httpx.AsyncBaseTransport):
@@ -28,6 +29,23 @@ async def test_gateway_transport_sets_optimizer_routing_signals() -> None:
     request = recording.requests[0]
     assert request.headers["x-kora-ai-capability"] == "json"
     assert request.headers["x-kora-ai-context-kind"] == "structured"
+
+
+async def test_gateway_transport_delegates_the_current_verified_user() -> None:
+    recording = RecordingTransport()
+    transport = GatewayHeadersTransport(
+        recording,
+        capability="text",
+        context_kind="conversation",
+    )
+
+    async with httpx.AsyncClient(transport=transport) as client:
+        with delegated_end_user_token("Bearer firebase-user-token"):
+            await client.post("https://gateway.test/v1/chat/completions", json={"messages": []})
+        await client.post("https://gateway.test/v1/chat/completions", json={"messages": []})
+
+    assert recording.requests[0].headers["x-kora-end-user-token"] == "Bearer firebase-user-token"
+    assert "x-kora-end-user-token" not in recording.requests[1].headers
 
 
 async def test_provider_factory_caches_each_route_and_closes_it() -> None:

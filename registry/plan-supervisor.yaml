@@ -1,0 +1,33 @@
+apiVersion: registry.agentic.dev/v1alpha1
+kind: Agent
+metadata:
+  name: plan-supervisor
+  namespace: kora
+  tenantId: kora
+  tag: 1.0.2
+  visibility: public
+  labels:
+    app.kubernetes.io/part-of: kora
+    ai.tesserix.dev/runtime: tesserix-adk
+spec:
+  title: Kora Plan Supervisor
+  description: Reviews meal-planner drafts against grounded health, habits, safety constraints, and nutrition evidence before user approval.
+  model:
+    provider: solo-agentgateway
+    name: kora-auto
+  a2a:
+    url: http://kora-ai.agentgateway-system.svc.cluster.local:8080/a2a/v1/plan-supervisor
+    preferredTransport: JSONRPC
+    provider:
+      organization: Tesserix
+      url: https://tesserix.app
+    capabilities:
+      streaming: false
+      pushNotifications: false
+    defaultInputModes: [application/json, text/plain]
+    defaultOutputModes: [text/plain]
+  skills:
+    - id: review-meal-plan
+      name: Review Meal Plan
+      description: Supervises complete 1-62 day plans with 1-6 meals per day against grounded health, habits, confirmed preferences, reviewed country nutrition evidence, and preparation safety before approval.
+      tags: [meal-planning, supervision, health-context, habits, grounded-data, safety]
