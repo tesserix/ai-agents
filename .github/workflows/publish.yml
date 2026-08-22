@@ -67,8 +67,8 @@ jobs:
           REGISTRY_PUBLISH_URL: https://publish-aregistry.tesserix.app/v0/apply
         run: |
           set -euo pipefail
-          if ! [[ "${REGISTRY_DEPLOY_KEY}" =~ ^[[:xdigit:]]{64}$ ]]; then
-            echo "registry deploy key must be a 64-character hexadecimal value" >&2
+          if ! [[ "${REGISTRY_DEPLOY_KEY}" =~ ^([[:xdigit:]]{64}|[A-Za-z0-9_-]{72})$ ]]; then
+            echo "registry deploy key must be 64-character hex or 72-character URL-safe" >&2
             exit 1
           fi
           oidc_response=$(curl --silent --show-error --fail-with-body \

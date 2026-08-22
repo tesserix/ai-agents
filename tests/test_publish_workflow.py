@@ -15,8 +15,8 @@ def test_registry_deploy_key_uses_mesh_safe_header() -> None:
 def test_registry_publish_validates_secret_without_printing_it() -> None:
     workflow = PUBLISH_WORKFLOW.read_text()
 
-    assert '[[ "${REGISTRY_DEPLOY_KEY}" =~ ^[[:xdigit:]]{64}$ ]]' in workflow
-    assert "deploy key must be a 64-character hexadecimal value" in workflow
+    assert ('[[ "${REGISTRY_DEPLOY_KEY}" =~ ^([[:xdigit:]]{64}|[A-Za-z0-9_-]{72})$ ]]') in workflow
+    assert "deploy key must be 64-character hex or 72-character URL-safe" in workflow
 
 
 def test_registry_publish_preserves_http_response_for_diagnostics() -> None:
