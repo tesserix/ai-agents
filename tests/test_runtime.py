@@ -60,7 +60,8 @@ async def test_runtime_validates_structured_meal_plan() -> None:
         content=(
             '{"summary":"Simple plan","days":['
             '{"date":"2026-08-19","meals":['
-            '{"name":"Breakfast","description":"Oats and fruit"}]}]}'
+            '{"name":"Breakfast","description":"Oats and fruit",'
+            '"preparation":"Simmer oats and top with fruit."}]}]}'
         )
     )
     service = RuntimeAgentService(
@@ -91,7 +92,11 @@ def test_registry_cards_are_derived_from_definitions() -> None:
     )
 
     cards: tuple[Any, ...] = service.cards()
-    assert {card["name"] for card in cards} == {"meal-planner", "nutrition-coach"}
+    assert {card["name"] for card in cards} == {
+        "meal-planner",
+        "nutrition-coach",
+        "plan-supervisor",
+    }
     assert all(card["revision"] for card in cards)
 
 

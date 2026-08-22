@@ -5,15 +5,18 @@ from fastapi.testclient import TestClient
 from kora_agents.api import create_app
 from kora_agents.config import Settings
 from kora_agents.execution import ExecutionResult
+from kora_agents.identity import current_end_user_token
 from kora_agents.runtime import AgentNotFoundError, ExecutionFailedError
 
 
 class FakeAgentService:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str, str]] = []
+        self.end_user_tokens: list[str | None] = []
 
     async def run(self, agent_name: str, prompt: str, *, tenant: str) -> ExecutionResult:
         self.calls.append((agent_name, prompt, tenant))
+        self.end_user_tokens.append(current_end_user_token())
         return ExecutionResult(
             run_id="run-1",
             agent_name=agent_name,
@@ -125,7 +128,10 @@ def test_a2a_message_send_uses_same_guarded_execution_path() -> None:
 
     response = app.post(
         "/a2a/v1/nutrition-coach",
-        headers={"Authorization": "Bearer service-secret"},
+        headers={
+            "Authorization": "Bearer service-secret",
+            "X-Kora-End-User-Token": "Bearer firebase-user-token",
+        },
         json={
             "jsonrpc": "2.0",
             "id": "message-1",
@@ -141,6 +147,7 @@ def test_a2a_message_send_uses_same_guarded_execution_path() -> None:
 
     assert response.status_code == 200
     assert service.calls == [("nutrition-coach", "Plan a balanced lunch", "kora")]
+    assert service.end_user_tokens == ["Bearer firebase-user-token"]
     body = response.json()
     assert body["jsonrpc"] == "2.0"
     assert body["id"] == "message-1"
@@ -152,6 +159,26 @@ def test_a2a_message_send_uses_same_guarded_execution_path() -> None:
         "cached_tokens": 10,
         "estimated": False,
     }
+
+
+def test_delegated_user_token_does_not_leak_to_the_next_request() -> None:
+    app, service = client()
+
+    for headers in (
+        {
+            "Authorization": "Bearer service-secret",
+            "X-Kora-End-User-Token": "Bearer first-user-token",
+        },
+        {"Authorization": "Bearer service-secret"},
+    ):
+        response = app.post(
+            "/v1/agents/nutrition-coach/runs",
+            headers=headers,
+            json={"prompt": "Help me plan lunch"},
+        )
+        assert response.status_code == 200
+
+    assert service.end_user_tokens == ["Bearer first-user-token", None]
 
 
 def test_configured_prompt_limit_applies_to_a2a_joined_parts() -> None:

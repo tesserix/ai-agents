@@ -7,7 +7,13 @@ newest reviewed ADK release, so build and CI both run against that one version.
 The service currently publishes:
 
 - `nutrition-coach`: bounded free-text nutrition guidance;
-- `meal-planner`: validated structured meal plans of at most seven days.
+- `meal-planner`: validated structured meal plans of at most 62 days (two calendar months);
+- `plan-supervisor`: an independent A2A review of planner drafts against the user's
+  grounded health context, habits, constraints, and reviewed nutrition evidence.
+
+Plans follow one explicit chain: meal planner draft → plan supervisor review →
+Kora API validation → user approval. The supervisor's final structured plan,
+not the planner draft, is the only plan that can become an approval card.
 
 Every run is fixed to the `kora` tenant, has no tools by default, applies PII,
 prompt-injection, and medical-safety guardrails, and enforces ADK token, call,
@@ -41,6 +47,16 @@ uv run ruff check .
 uv run mypy --strict src/
 uv run pytest --cov --cov-fail-under=90
 uv build
+```
+
+Run the reviewed suites end to end through Agent Gateway and Vertex with a
+short-lived Firebase user token. Secrets are read only from the environment:
+
+```bash
+KORA_EVAL_GATEWAY_ORIGIN=https://gateway.example \
+KORA_EVAL_GATEWAY_API_KEY=... \
+KORA_EVAL_END_USER_TOKEN=... \
+uv run python scripts/run_evals.py
 ```
 
 The container runs as UID/GID 65532 with a read-only-compatible filesystem.
