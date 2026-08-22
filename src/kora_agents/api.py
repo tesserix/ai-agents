@@ -176,7 +176,14 @@ def create_app(
         )
 
     @app.exception_handler(ExecutionFailedError)
-    async def failed_run(_request: Request, _error: ExecutionFailedError) -> JSONResponse:
+    async def failed_run(request: Request, error: ExecutionFailedError) -> JSONResponse:
+        # The caller gets a stable code and no internals; the operator gets the
+        # run state, without which an intermittent 502 cannot be diagnosed.
+        logger.warning(
+            "agent_execution_failed",
+            path=request.url.path,
+            reason=str(error) or "unknown",
+        )
         return JSONResponse(
             status_code=502,
             content={"code": "agent_execution_failed", "message": "agent execution failed"},

@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from kora_agents.api import create_app
 from kora_agents.config import Settings
 from kora_agents.execution import ExecutionResult
-from kora_agents.runtime import AgentNotFoundError
+from kora_agents.runtime import AgentNotFoundError, ExecutionFailedError
 
 
 class FakeAgentService:
@@ -200,3 +200,29 @@ def test_shutdown_callback_runs_with_application_lifespan() -> None:
         assert not stopped
 
     assert stopped
+
+
+def test_failed_run_logs_why_it_failed(capsys) -> None:
+    class FailingAgentService(FakeAgentService):
+        async def run(self, agent_name: str, prompt: str, *, tenant: str) -> ExecutionResult:
+            raise ExecutionFailedError("guardrail_blocked")
+
+    settings = Settings(api_key="service-secret", gateway_api_key="gateway-secret")
+    app = TestClient(create_app(settings=settings, service=FailingAgentService()))
+
+    response = app.post(
+        "/v1/agents/nutrition-coach/runs",
+        headers={"Authorization": "Bearer service-secret"},
+        json={"prompt": "how much protein"},
+    )
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "code": "agent_execution_failed",
+        "message": "agent execution failed",
+    }
+    # The reason never reaches the caller, but a bare 502 in the pod log is
+    # undiagnosable — the operator gets the state that failed.
+    logged = capsys.readouterr()
+    assert "agent_execution_failed" in logged.out
+    assert "guardrail_blocked" in logged.out
