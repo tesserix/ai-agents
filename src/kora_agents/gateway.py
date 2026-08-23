@@ -63,7 +63,7 @@ class GatewayProviderFactory:
             return provider
         provider = OpenAICompatibleProvider(
             self._settings.gateway_model,
-            base_url=self._settings.gateway_base_url,
+            base_url=self._settings.gateway_base_url.rstrip("/").removesuffix("/v1"),
             name="solo-agentgateway",
             capabilities=ModelCapabilities(
                 structured_output=True,
