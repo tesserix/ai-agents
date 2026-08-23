@@ -130,7 +130,7 @@ def test_a2a_message_send_uses_same_guarded_execution_path() -> None:
         "/a2a/v1/nutrition-coach",
         headers={
             "Authorization": "Bearer service-secret",
-            "X-Kora-End-User-Token": "Bearer firebase-user-token",
+            "X-Kora-Delegated-End-User-Token": "Bearer firebase-user-token",
         },
         json={
             "jsonrpc": "2.0",
@@ -167,9 +167,12 @@ def test_delegated_user_token_does_not_leak_to_the_next_request() -> None:
     for headers in (
         {
             "Authorization": "Bearer service-secret",
-            "X-Kora-End-User-Token": "Bearer first-user-token",
+            "X-Kora-Delegated-End-User-Token": "Bearer first-user-token",
         },
-        {"Authorization": "Bearer service-secret"},
+        {
+            "Authorization": "Bearer service-secret",
+            "X-Kora-End-User-Token": "Bearer untrusted-user-token",
+        },
     ):
         response = app.post(
             "/v1/agents/nutrition-coach/runs",
