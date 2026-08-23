@@ -17,7 +17,7 @@ from starlette.responses import Response
 
 from kora_agents.config import Settings
 from kora_agents.execution import AgentService, ExecutionResult
-from kora_agents.identity import DELEGATED_IDENTITY_HEADER, delegated_end_user_token
+from kora_agents.identity import INBOUND_DELEGATED_IDENTITY_HEADER, delegated_end_user_token
 from kora_agents.runtime import AgentNotFoundError, ExecutionFailedError
 
 
@@ -212,7 +212,7 @@ def create_app(
         body: RunRequest,
         end_user_token: Annotated[
             str | None,
-            Header(alias=DELEGATED_IDENTITY_HEADER, max_length=8192),
+            Header(alias=INBOUND_DELEGATED_IDENTITY_HEADER, max_length=8192),
         ] = None,
     ) -> RunResponse:
         if len(body.prompt) > settings.max_prompt_chars:
@@ -227,7 +227,7 @@ def create_app(
         body: A2ARequest,
         end_user_token: Annotated[
             str | None,
-            Header(alias=DELEGATED_IDENTITY_HEADER, max_length=8192),
+            Header(alias=INBOUND_DELEGATED_IDENTITY_HEADER, max_length=8192),
         ] = None,
     ) -> dict[str, object]:
         prompt = "\n".join(part.text for part in body.params.message.parts)

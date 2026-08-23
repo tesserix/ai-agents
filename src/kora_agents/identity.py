@@ -4,7 +4,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-DELEGATED_IDENTITY_HEADER = "X-Kora-End-User-Token"
+INBOUND_DELEGATED_IDENTITY_HEADER = "X-Kora-Delegated-End-User-Token"
+MODEL_GATEWAY_END_USER_AUTH_HEADER = "X-Kora-End-User-Token"
 
 _end_user_token: ContextVar[str | None] = ContextVar("kora_end_user_token", default=None)
 
