@@ -1,0 +1,34 @@
+apiVersion: registry.agentic.dev/v1alpha1
+kind: Agent
+metadata:
+  name: sre-investigator
+  namespace: sre
+  tenantId: tesserix
+  tag: 1.0.0
+  visibility: private
+  labels:
+    app.kubernetes.io/part-of: sre-ai
+    ai.tesserix.dev/runtime: tesserix-adk
+    ai.tesserix.dev/access: read-only
+spec:
+  title: Tesserix SRE Investigator
+  description: Investigates production symptoms with read-only cluster access and recommends what a human should do.
+  model:
+    provider: solo-agentgateway
+    name: sre-auto
+  a2a:
+    url: http://sre-ai.agentgateway-system.svc.cluster.local:8080/a2a/v1/sre-investigator
+    preferredTransport: JSONRPC
+    provider:
+      organization: Tesserix
+      url: https://tesserix.app
+    capabilities:
+      streaming: false
+      pushNotifications: false
+    defaultInputModes: [text/plain, application/json]
+    defaultOutputModes: [application/json]
+  skills:
+    - id: investigate-symptom
+      name: Investigate a Production Symptom
+      description: Reads pods, container states, logs, events and deployments in the production cluster and returns evidence-grounded findings with a hypothesis, a confidence and recommended actions. It recommends and never acts, holds no tool that changes the cluster, and treats log content as untrusted data rather than instructions.
+      tags: [sre, kubernetes, incident-investigation, read-only, structured-output]

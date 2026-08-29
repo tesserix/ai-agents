@@ -62,3 +62,25 @@ def test_registry_publish_uses_repository_bound_oidc_route():
     assert "X-GitHub-OIDC-Token: Bearer ${github_oidc_token}" in script
     assert '"${REGISTRY_PUBLISH_URL}"' in script
     assert "https://aregistry.tesserix.app/v0/apply" not in script
+
+
+def test_no_manifest_is_published_before_the_evaluation_suite_passes() -> None:
+    job = yaml.safe_load(PUBLISH_WORKFLOW.read_text())["jobs"]["registry"]
+    names = [step.get("name") for step in job["steps"]]
+
+    gate = next(
+        step
+        for step in job["steps"]
+        if step.get("name") == "Gate the publish on the evaluation suite"
+    )
+    assert "python -m sre_agent.evaluation evals/sre-investigator.yaml" in gate["run"]
+    assert names.index("Gate the publish on the evaluation suite") < names.index(
+        "Publish reviewed Agent manifests"
+    )
+
+
+def test_the_gate_runs_inside_the_adk_base_image_production_uses() -> None:
+    job = yaml.safe_load(PUBLISH_WORKFLOW.read_text())["jobs"]["registry"]
+
+    assert job["container"]["image"].startswith("ghcr.io/tesserix/base-python-adk-3.14:")
+    assert job["env"]["UV_PROJECT_ENVIRONMENT"] == "/opt/adk-venv"
