@@ -88,7 +88,7 @@ AgentDefinition.declared(
         name="sre-investigator",
         version="1.0.0",
         instructions=_INSTRUCTIONS,
-        model="gpt-5.4",
+        model="gemini-2.5-flash",
         tools=TOOL_NAMES,
         idempotent_tools=TOOL_NAMES,
         output_type=Investigation,

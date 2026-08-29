@@ -15,7 +15,7 @@ spec:
   description: Investigates production symptoms with read-only cluster access and recommends what a human should do.
   model:
     provider: solo-agentgateway
-    name: gpt-5.4
+    name: gemini-2.5-flash
   a2a:
     url: http://agentgateway-mcp.agentgateway-system.svc.cluster.local:8080/a2a/v1/sre-investigator
     preferredTransport: JSONRPC

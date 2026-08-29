@@ -22,8 +22,8 @@ class Settings(BaseSettings):
 
     api_key: SecretStr
     gateway_api_key: SecretStr
-    gateway_base_url: str = "http://ai-gateway.agentgateway-system.svc.cluster.local:8080/openai/v1"
-    gateway_model: str = "gpt-5.4"
+    gateway_base_url: str = "http://ai-gateway.agentgateway-system.svc.cluster.local:8080/vertex/v1"
+    gateway_model: str = "gemini-2.5-flash"
     tenant_id: str = "tesserix"
     cluster_url: str = "https://kubernetes.default.svc"
     cluster_token_path: str = f"{SERVICE_ACCOUNT}/token"

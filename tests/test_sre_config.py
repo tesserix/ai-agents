@@ -17,9 +17,9 @@ def test_the_defaults_point_at_the_in_cluster_api_server_and_the_sre_model() -> 
     assert loaded.cluster_url == "https://kubernetes.default.svc"
     assert loaded.cluster_token_path.endswith("/serviceaccount/token")
     assert loaded.gateway_base_url == (
-        "http://ai-gateway.agentgateway-system.svc.cluster.local:8080/openai/v1"
+        "http://ai-gateway.agentgateway-system.svc.cluster.local:8080/vertex/v1"
     )
-    assert loaded.gateway_model == INVESTIGATOR.agent.model == "gpt-5.4"
+    assert loaded.gateway_model == INVESTIGATOR.agent.model == "gemini-2.5-flash"
     assert loaded.namespaces == ()
 
 

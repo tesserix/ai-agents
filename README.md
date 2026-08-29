@@ -64,7 +64,7 @@ The investigator uses the `SRE_AGENT_` prefix:
 | `SRE_AGENT_API_KEY` | Bearer key for the investigation and A2A endpoints |
 | `SRE_AGENT_GATEWAY_API_KEY` | Workload credential presented to the shared model gateway |
 | `SRE_AGENT_GATEWAY_BASE_URL` | OpenAI-compatible shared model-gateway URL |
-| `SRE_AGENT_GATEWAY_MODEL` | Reviewed model name (`gpt-5.4`) |
+| `SRE_AGENT_GATEWAY_MODEL` | Reviewed Vertex model name (`gemini-2.5-flash`) |
 | `SRE_AGENT_CLUSTER_URL` | Kubernetes API server, `https://kubernetes.default.svc` in cluster |
 | `SRE_AGENT_CLUSTER_TOKEN_PATH` | Mounted ServiceAccount token |
 | `SRE_AGENT_CLUSTER_CA_PATH` | Mounted cluster CA |
