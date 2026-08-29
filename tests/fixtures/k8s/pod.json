@@ -1,0 +1,42 @@
+{
+  "kind": "Pod",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "marketplace-order-service-7c9c6bd4f-lm8vt",
+    "namespace": "marketplace",
+    "labels": { "app": "marketplace-order-service" },
+    "creationTimestamp": "2026-08-29T07:52:41Z",
+    "annotations": {
+      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"v1\"}"
+    }
+  },
+  "spec": { "nodeName": "gke-tesseract-prod-in-gke-pool-1-a1b2c3-p7q2" },
+  "status": {
+    "phase": "Running",
+    "startTime": "2026-08-29T07:52:43Z",
+    "conditions": [
+      { "type": "Ready", "status": "False", "reason": "ContainersNotReady" }
+    ],
+    "containerStatuses": [
+      {
+        "name": "server",
+        "ready": false,
+        "restartCount": 7,
+        "image": "ghcr.io/tesserix/marketplace-order-service:2.11.0",
+        "state": {
+          "waiting": {
+            "reason": "CrashLoopBackOff",
+            "message": "back-off 5m0s restarting failed container=server"
+          }
+        },
+        "lastState": {
+          "terminated": {
+            "reason": "Error",
+            "exitCode": 2,
+            "finishedAt": "2026-08-29T08:14:55Z"
+          }
+        }
+      }
+    ]
+  }
+}

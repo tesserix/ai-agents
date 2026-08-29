@@ -1,0 +1,33 @@
+{
+  "kind": "EventList",
+  "apiVersion": "v1",
+  "metadata": { "resourceVersion": "884301" },
+  "items": [
+    {
+      "metadata": { "name": "marketplace-order-service.17f2", "namespace": "marketplace" },
+      "type": "Warning",
+      "reason": "BackOff",
+      "count": 12,
+      "lastTimestamp": "2026-08-29T08:15:02Z",
+      "message": "Back-off restarting failed container server in pod marketplace-order-service-7c9c6bd4f-lm8vt",
+      "involvedObject": {
+        "kind": "Pod",
+        "name": "marketplace-order-service-7c9c6bd4f-lm8vt",
+        "namespace": "marketplace"
+      }
+    },
+    {
+      "metadata": { "name": "marketplace-order-service.17e9", "namespace": "marketplace" },
+      "type": "Normal",
+      "reason": "Pulled",
+      "count": 1,
+      "eventTime": "2026-08-29T07:52:50Z",
+      "message": "Container image \"ghcr.io/tesserix/marketplace-order-service:2.11.0\" already present on machine",
+      "involvedObject": {
+        "kind": "Pod",
+        "name": "marketplace-order-service-7c9c6bd4f-lm8vt",
+        "namespace": "marketplace"
+      }
+    }
+  ]
+}
