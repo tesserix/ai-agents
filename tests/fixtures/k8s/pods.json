@@ -1,0 +1,63 @@
+{
+  "kind": "PodList",
+  "apiVersion": "v1",
+  "metadata": { "resourceVersion": "884213" },
+  "items": [
+    {
+      "metadata": {
+        "name": "kora-ai-5f7d9c8b4d-2xkqp",
+        "namespace": "kora",
+        "labels": { "app": "kora-ai" },
+        "creationTimestamp": "2026-08-29T04:11:02Z"
+      },
+      "spec": { "nodeName": "gke-tesseract-prod-in-gke-pool-1-a1b2c3-9k4m" },
+      "status": {
+        "phase": "Running",
+        "startTime": "2026-08-29T04:11:04Z",
+        "containerStatuses": [
+          {
+            "name": "server",
+            "ready": true,
+            "restartCount": 0,
+            "image": "ghcr.io/tesserix/kora-ai:1.4.2",
+            "state": { "running": { "startedAt": "2026-08-29T04:11:19Z" } }
+          }
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "name": "marketplace-order-service-7c9c6bd4f-lm8vt",
+        "namespace": "marketplace",
+        "labels": { "app": "marketplace-order-service" },
+        "creationTimestamp": "2026-08-29T07:52:41Z"
+      },
+      "spec": { "nodeName": "gke-tesseract-prod-in-gke-pool-1-a1b2c3-p7q2" },
+      "status": {
+        "phase": "Running",
+        "startTime": "2026-08-29T07:52:43Z",
+        "containerStatuses": [
+          {
+            "name": "server",
+            "ready": false,
+            "restartCount": 7,
+            "image": "ghcr.io/tesserix/marketplace-order-service:2.11.0",
+            "state": {
+              "waiting": {
+                "reason": "CrashLoopBackOff",
+                "message": "back-off 5m0s restarting failed container=server"
+              }
+            },
+            "lastState": {
+              "terminated": {
+                "reason": "Error",
+                "exitCode": 2,
+                "finishedAt": "2026-08-29T08:14:55Z"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

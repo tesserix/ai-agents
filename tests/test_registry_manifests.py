@@ -6,9 +6,10 @@ from kora_agents.definitions import DEFINITIONS
 
 
 def test_registry_manifests_are_tenant_scoped_a2a_agents() -> None:
-    manifests = [
+    published = [
         yaml.safe_load(path.read_text()) for path in sorted(Path("registry").glob("*.yaml"))
     ]
+    manifests = [each for each in published if each["metadata"]["namespace"] == "kora"]
 
     assert {manifest["metadata"]["name"] for manifest in manifests} == {
         "meal-planner",

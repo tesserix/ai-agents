@@ -2,7 +2,7 @@ from pathlib import Path
 
 import yaml
 
-ADK_BASE = "ghcr.io/tesserix/base-python-adk-3.13:"
+ADK_BASE = "ghcr.io/tesserix/base-python-adk-3.14:"
 
 
 def _verify_job() -> dict:

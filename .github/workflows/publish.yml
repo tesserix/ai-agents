@@ -56,11 +56,25 @@ jobs:
       contents: read
       id-token: write
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
+    # Verify inside the image production runs: the ADK comes from the base, not the lock.
+    container:
+      image: ghcr.io/tesserix/base-python-adk-3.14:20260829
+      options: --user root
+    env:
+      UV_PROJECT_ENVIRONMENT: /opt/adk-venv
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.5"
+          enable-cache: true
+      - run: uv sync --frozen --inexact
+      # No manifest reaches the registry unless every evaluation case still holds.
+      - name: Gate the publish on the evaluation suite
+        run: uv run --no-sync python -m sre_agent.evaluation evals/sre-investigator.yaml
       - name: Publish reviewed Agent manifests
         env:
           REGISTRY_DEPLOY_KEY: ${{ secrets.AGENTIC_REGISTRY_DEPLOY_KEY }}

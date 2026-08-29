@@ -1,0 +1,50 @@
+{
+  "kind": "DeploymentList",
+  "apiVersion": "apps/v1",
+  "metadata": { "resourceVersion": "884400" },
+  "items": [
+    {
+      "metadata": {
+        "name": "marketplace-order-service",
+        "namespace": "marketplace",
+        "generation": 14,
+        "creationTimestamp": "2026-05-02T10:00:00Z"
+      },
+      "spec": {
+        "replicas": 3,
+        "template": {
+          "spec": {
+            "containers": [
+              {
+                "name": "server",
+                "image": "ghcr.io/tesserix/marketplace-order-service:2.11.0"
+              }
+            ]
+          }
+        }
+      },
+      "status": {
+        "observedGeneration": 14,
+        "replicas": 3,
+        "readyReplicas": 2,
+        "updatedReplicas": 3,
+        "availableReplicas": 2,
+        "unavailableReplicas": 1,
+        "conditions": [
+          {
+            "type": "Available",
+            "status": "False",
+            "reason": "MinimumReplicasUnavailable",
+            "message": "Deployment does not have minimum availability."
+          },
+          {
+            "type": "Progressing",
+            "status": "True",
+            "reason": "ReplicaSetUpdated",
+            "message": "ReplicaSet \"marketplace-order-service-7c9c6bd4f\" is progressing."
+          }
+        ]
+      }
+    }
+  ]
+}
