@@ -19,6 +19,14 @@ jobs:
   image:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: kora-runtime
+            image: ghcr.io/tesserix/ai-agents
+          - target: sre-runtime
+            image: ghcr.io/tesserix/ai-agents-sre
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -33,7 +41,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ghcr.io/tesserix/ai-agents
+          images: ${{ matrix.image }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -42,6 +50,7 @@ jobs:
       - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
+          target: ${{ matrix.target }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -59,7 +68,7 @@ jobs:
     timeout-minutes: 15
     # Verify inside the image production runs: the ADK comes from the base, not the lock.
     container:
-      image: ghcr.io/tesserix/base-python-adk-3.14:20260829
+      image: ghcr.io/tesserix/base-python-adk-3.14:20260829@sha256:5a6fd1863ed7f37f3929cc596d0ec063c3077c11713cd334f14d1df2b30ef386
       options: --user root
     env:
       UV_PROJECT_ENVIRONMENT: /opt/adk-venv
@@ -78,10 +87,15 @@ jobs:
       - name: Publish reviewed Agent manifests
         env:
           REGISTRY_DEPLOY_KEY: ${{ secrets.AGENTIC_REGISTRY_DEPLOY_KEY }}
+          REGISTRY_SRE_DEPLOY_KEY: ${{ secrets.AGENTIC_REGISTRY_SRE_DEPLOY_KEY }}
           REGISTRY_PUBLISH_URL: https://publish-aregistry.tesserix.app/v0/apply
         run: |
           set -euo pipefail
           if ! [[ "${REGISTRY_DEPLOY_KEY}" =~ ^([[:xdigit:]]{64}|[A-Za-z0-9_-]{72})$ ]]; then
+            echo "registry deploy key must be 64-character hex or 72-character URL-safe" >&2
+            exit 1
+          fi
+          if ! [[ "${REGISTRY_SRE_DEPLOY_KEY}" =~ ^([[:xdigit:]]{64}|[A-Za-z0-9_-]{72})$ ]]; then
             echo "registry deploy key must be 64-character hex or 72-character URL-safe" >&2
             exit 1
           fi
@@ -92,12 +106,16 @@ jobs:
           response_file=$(mktemp)
           trap 'unset github_oidc_token oidc_response; rm -f "${response_file}"' EXIT
           for manifest in registry/*.yaml; do
+            case "${manifest}" in
+              registry/sre-investigator.yaml) deploy_key="${REGISTRY_SRE_DEPLOY_KEY}" ;;
+              *) deploy_key="${REGISTRY_DEPLOY_KEY}" ;;
+            esac
             status=$(curl --silent --show-error \
               --retry 3 --retry-all-errors --max-time 30 \
               -H "User-Agent: Tesserix-Agent-Publisher/1.0 (+https://github.com/tesserix/ai-agents)" \
               -H "Accept: application/json" \
               -H "X-GitHub-OIDC-Token: Bearer ${github_oidc_token}" \
-              -H "X-Agentic-Registry-Deploy-Key: ${REGISTRY_DEPLOY_KEY}" \
+              -H "X-Agentic-Registry-Deploy-Key: ${deploy_key}" \
               -H "Content-Type: application/yaml" \
               --data-binary "@${manifest}" \
               --output "${response_file}" \

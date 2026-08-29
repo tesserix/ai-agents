@@ -53,6 +53,9 @@ async def test_a_tool_schema_describes_only_arguments_a_model_may_choose() -> No
     assert schema["required"] == ["namespace"]
     assert set(schema["properties"]) == {"namespace", "label_selector", "limit"}
     assert schema["properties"]["namespace"]["description"]
+    assert schema["properties"]["namespace"]["maxLength"] == 63
+    assert schema["properties"]["limit"]["minimum"] == 1
+    assert schema["properties"]["limit"]["maximum"] == 50
 
 
 async def test_list_pods_returns_summaries_a_model_can_read() -> None:
@@ -71,6 +74,17 @@ async def test_an_argument_the_schema_never_offered_is_refused_before_the_cluste
 
     with pytest.raises(ToolArgumentValidationError):
         await tools.list_pods.invoke({"namespace": "marketplace", "delete": True})
+
+    assert transport.requests == []
+
+
+async def test_a_resource_name_cannot_traverse_into_another_api_path() -> None:
+    transport = serving({})
+
+    with pytest.raises(ToolArgumentValidationError):
+        await tools.get_pod.invoke(
+            {"namespace": "marketplace", "name": "../secrets/database-credentials"}
+        )
 
     assert transport.requests == []
 

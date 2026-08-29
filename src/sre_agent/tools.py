@@ -8,8 +8,9 @@ argument — a model choosing which cluster to read would be a model choosing a 
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
+from pydantic import Field
 from tesserix_adk.tools import Tool, ToolFailure, ToolRegistry, tool
 
 from sre_agent.cluster import (
@@ -24,6 +25,33 @@ from sre_agent.cluster import (
 
 _READ_TIMEOUT = 20.0
 """How long one cluster read may take before the run is told it failed."""
+
+type _Namespace = Annotated[
+    str,
+    Field(
+        min_length=1,
+        max_length=63,
+        pattern=r"^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$",
+    ),
+]
+type _ResourceName = Annotated[
+    str,
+    Field(
+        min_length=1,
+        max_length=253,
+        pattern=r"^[a-z0-9](?:[-.a-z0-9]*[a-z0-9])?$",
+    ),
+]
+type _ContainerName = Annotated[
+    str,
+    Field(
+        max_length=63,
+        pattern=r"^(?:[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)?$",
+    ),
+]
+type _LabelSelector = Annotated[str, Field(max_length=1_024)]
+type _ItemLimit = Annotated[int, Field(ge=1, le=MAX_ITEMS)]
+type _LogTail = Annotated[int, Field(ge=1, le=MAX_LOG_LINES)]
 
 _cluster: KubernetesReader | None = None
 
@@ -47,7 +75,7 @@ def cluster(tool_name: str) -> KubernetesReader:
 
 @tool(idempotency="read_only", timeout=_READ_TIMEOUT)
 async def list_pods(
-    namespace: str, label_selector: str = "", limit: int = 20
+    namespace: _Namespace, label_selector: _LabelSelector = "", limit: _ItemLimit = 20
 ) -> tuple[PodSummary, ...]:
     """List the pods in a namespace with their phase, restarts and container state.
 
@@ -64,7 +92,7 @@ async def list_pods(
 
 
 @tool(idempotency="read_only", timeout=_READ_TIMEOUT)
-async def get_pod(namespace: str, name: str) -> PodSummary:
+async def get_pod(namespace: _Namespace, name: _ResourceName) -> PodSummary:
     """Read one pod, including why each container is in the state it is in.
 
     Args:
@@ -76,10 +104,10 @@ async def get_pod(namespace: str, name: str) -> PodSummary:
 
 @tool(idempotency="read_only", timeout=_READ_TIMEOUT)
 async def get_pod_logs(
-    namespace: str,
-    name: str,
-    container: str = "",
-    tail_lines: int = 100,
+    namespace: _Namespace,
+    name: _ResourceName,
+    container: _ContainerName = "",
+    tail_lines: _LogTail = 100,
     previous: bool = False,
 ) -> PodLogs:
     """Read the tail of a container's log, or of the instance that died before it.
@@ -103,7 +131,7 @@ async def get_pod_logs(
 
 @tool(idempotency="read_only", timeout=_READ_TIMEOUT)
 async def list_events(
-    namespace: str, warnings_only: bool = False, limit: int = 30
+    namespace: _Namespace, warnings_only: bool = False, limit: _ItemLimit = 30
 ) -> tuple[EventSummary, ...]:
     """List recent Kubernetes events in a namespace, newest state first.
 
@@ -119,7 +147,9 @@ async def list_events(
 
 
 @tool(idempotency="read_only", timeout=_READ_TIMEOUT)
-async def list_deployments(namespace: str, limit: int = 30) -> tuple[DeploymentSummary, ...]:
+async def list_deployments(
+    namespace: _Namespace, limit: _ItemLimit = 30
+) -> tuple[DeploymentSummary, ...]:
     """List the deployments in a namespace with desired against ready replicas.
 
     Args:
@@ -132,7 +162,7 @@ async def list_deployments(namespace: str, limit: int = 30) -> tuple[DeploymentS
 
 
 @tool(idempotency="read_only", timeout=_READ_TIMEOUT)
-async def get_deployment(namespace: str, name: str) -> DeploymentSummary:
+async def get_deployment(namespace: _Namespace, name: _ResourceName) -> DeploymentSummary:
     """Read one deployment's rollout state, images and status conditions.
 
     Args:

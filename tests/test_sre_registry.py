@@ -15,12 +15,12 @@ def test_the_manifest_publishes_the_definition_this_repository_reviewed() -> Non
     assert MANIFEST["spec"]["model"]["name"] == INVESTIGATOR.agent.model
 
 
-def test_the_agent_is_reachable_over_a2a_through_its_own_gateway_route() -> None:
+def test_the_agent_is_reachable_over_a2a_through_the_shared_gateway_route() -> None:
     a2a = MANIFEST["spec"]["a2a"]
 
     assert a2a["preferredTransport"] == "JSONRPC"
     assert a2a["url"] == (
-        "http://sre-ai.agentgateway-system.svc.cluster.local:8080/a2a/v1/sre-investigator"
+        "http://agentgateway-mcp.agentgateway-system.svc.cluster.local:8080/a2a/v1/sre-investigator"
     )
     assert a2a["capabilities"]["streaming"] is False
 

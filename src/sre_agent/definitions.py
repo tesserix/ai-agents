@@ -116,7 +116,7 @@ def investigator(
             name="sre-investigator",
             version="1.0.0",
             instructions=_INSTRUCTIONS,
-            model="sre-auto",
+            model="gpt-5.4",
             tools=TOOL_NAMES,
             idempotent_tools=TOOL_NAMES,
             output_type=Investigation,

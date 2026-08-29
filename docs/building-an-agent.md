@@ -14,14 +14,15 @@ can get wrong.
 Start from the base image, not from `python:3.14`:
 
 ```dockerfile
-FROM ghcr.io/tesserix/base-python-adk-3.14:20260829
+FROM ghcr.io/tesserix/base-python-adk-3.14:20260829@sha256:5a6fd1863ed7f37f3929cc596d0ec063c3077c11713cd334f14d1df2b30ef386
 ```
 
 The ADK is private and pre-1.0. It is preinstalled in `/opt/adk-venv`, which is
 on `PATH` and writable by uid 10001. Never add `tesserix-adk` to
 `pyproject.toml`: a hand-pinned wheel URL drifts silently, and `base-docker-images`
 already resolves, verifies and rebuilds the newest release every Saturday. Pin
-the dated tag rather than `:latest`, and let the weekly rebuild open a PR.
+the dated tag and its OCI index digest rather than `:latest`, and let the weekly
+rebuild open a PR.
 
 CI must run inside that same image (`.github/workflows/ci.yml`), with
 `UV_PROJECT_ENVIRONMENT=/opt/adk-venv` and `uv sync --frozen --inexact`. Without
@@ -87,7 +88,7 @@ AgentDefinition.declared(
         name="sre-investigator",
         version="1.0.0",
         instructions=_INSTRUCTIONS,
-        model="sre-auto",
+        model="gpt-5.4",
         tools=TOOL_NAMES,
         idempotent_tools=TOOL_NAMES,
         output_type=Investigation,
@@ -174,9 +175,10 @@ variable fails at start-up rather than pointing the agent somewhere nobody
 intended. `__repr__` is overridden so neither credential reaches a traceback.
 
 The gateway provider carries the definition's metadata as routing headers and
-its key through a named `SecretProvider`; the model name is the gateway's
-routing name (`sre-auto`), not a vendor model, so the model can change without a
-release.
+its key through a named `SecretProvider`. The reviewed model name is identical
+in the definition, runtime configuration and Registry manifest. Changing it is
+an explicit Agent release; provider credentials and routing policy remain in
+the shared model gateway.
 
 `main.py` is the only module that connects to anything: it builds the cluster
 client from the ServiceAccount token and CA, calls `tools.use_cluster(...)`,
@@ -188,13 +190,15 @@ file excluded from coverage.
 `registry/sre-investigator.yaml`, `.github/workflows/publish.yml`
 
 One manifest per agent, `registry.agentic.dev/v1alpha1`, with the A2A URL
-pointing at the Solo Agent Gateway route rather than the pod. An agent that
+pointing at the shared `agentgateway-mcp` route rather than the pod. An agent that
 reads production is `visibility: private`. The skill description is what another
 team reads before calling you, so it says what the agent will not do, in
 sentences rather than tags.
 
 The publish job runs the evaluation suite inside the ADK base image first. No
-manifest reaches the registry unless every case still holds.
+manifest reaches the registry unless every case still holds. Kora and the
+platform SRE tenant use distinct deploy keys; a key can never publish into the
+other tenant.
 
 ## 6. What to check before calling it done
 

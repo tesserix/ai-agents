@@ -170,6 +170,18 @@ def test_the_published_card_names_the_tools_and_says_the_agent_only_reads() -> N
     assert "get_pod_logs" in card["tools"]
 
 
+def test_the_agent_card_is_available_on_the_authenticated_a2a_path() -> None:
+    app, _ = client()
+
+    response = app.get(
+        "/a2a/v1/sre-investigator/card",
+        headers={"Authorization": "Bearer service-secret"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["name"] == "sre-investigator"
+
+
 def test_the_a2a_edge_requires_a_bearer_token() -> None:
     app, service = client()
 

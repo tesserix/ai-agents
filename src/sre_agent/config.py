@@ -22,8 +22,8 @@ class Settings(BaseSettings):
 
     api_key: SecretStr
     gateway_api_key: SecretStr
-    gateway_base_url: str = "http://sre-ai.agentgateway-system.svc.cluster.local:8080/v1"
-    gateway_model: str = "sre-auto"
+    gateway_base_url: str = "http://ai-gateway.agentgateway-system.svc.cluster.local:8080/openai/v1"
+    gateway_model: str = "gpt-5.4"
     tenant_id: str = "tesserix"
     cluster_url: str = "https://kubernetes.default.svc"
     cluster_token_path: str = f"{SERVICE_ACCOUNT}/token"

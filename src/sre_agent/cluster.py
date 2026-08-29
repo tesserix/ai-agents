@@ -11,7 +11,8 @@ run spends its budget on reasoning rather than on `metadata.annotations`.
 
 from __future__ import annotations
 
-from collections.abc import Collection, Mapping
+import asyncio
+from collections.abc import AsyncGenerator, Collection, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -135,12 +136,34 @@ class DeploymentSummary(_Bounded):
     conditions: tuple[ConditionSummary, ...]
 
 
+class _ServiceAccountAuth(httpx.Auth):
+    """Load the projected token for every request so Kubernetes may rotate it."""
+
+    def __init__(self, token_path: Path) -> None:
+        self._token_path = token_path
+
+    async def async_auth_flow(
+        self, request: httpx.Request
+    ) -> AsyncGenerator[httpx.Request, httpx.Response]:
+        token = await asyncio.to_thread(self._read_token)
+        if token:
+            request.headers["Authorization"] = f"Bearer {token}"
+        yield request
+
+    def _read_token(self) -> str:
+        try:
+            return self._token_path.read_text().strip() if self._token_path.is_file() else ""
+        except FileNotFoundError:
+            return ""
+
+
 def cluster_client(
     url: str,
     *,
     token_path: str | Path | None,
     ca_path: str | Path | None,
     timeout: float,
+    transport: httpx.AsyncBaseTransport | None = None,
 ) -> httpx.AsyncClient:
     """A client for one cluster, carrying the ServiceAccount token and the cluster's CA.
 
@@ -148,13 +171,13 @@ def cluster_client(
     run against a proxied API server needs.
     """
     token_file = Path(token_path) if token_path else None
-    token = token_file.read_text().strip() if token_file and token_file.is_file() else ""
     verify: str | bool = str(ca_path) if ca_path and Path(ca_path).is_file() else True
     return httpx.AsyncClient(
         base_url=url,
-        headers={"Authorization": f"Bearer {token}"} if token else {},
+        auth=_ServiceAccountAuth(token_file) if token_file else None,
         verify=verify,
         timeout=timeout,
+        transport=transport,
     )
 
 

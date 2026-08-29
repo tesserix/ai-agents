@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 20
     # Verify inside the image production runs: the ADK comes from the base, not the lock.
     container:
-      image: ghcr.io/tesserix/base-python-adk-3.14:20260829
+      image: ghcr.io/tesserix/base-python-adk-3.14:20260829@sha256:5a6fd1863ed7f37f3929cc596d0ec063c3077c11713cd334f14d1df2b30ef386
       # The base image runs as uid 10001; the runner's work dir is root-owned.
       options: --user root
     env:
