@@ -1,10 +1,17 @@
-# Kora AI Agents
+# Tesserix AI Agents
 
-Kora's deployable AI agents, built on `tesserix-adk` and routed only through the
-Solo Agent Gateway. The ADK is not a declared dependency: it comes preinstalled
-in `/opt/adk-venv` from `ghcr.io/tesserix/base-python-adk-3.13`, which pins the
+Deployable AI agents, built on `tesserix-adk` and routed only through the Solo
+Agent Gateway. The ADK is not a declared dependency: it comes preinstalled in
+`/opt/adk-venv` from `ghcr.io/tesserix/base-python-adk-3.14`, which pins the
 newest reviewed ADK release, so build and CI both run against that one version.
-The service currently publishes:
+
+Two services live here: the Kora agents (`kora_agents`) and the SRE
+investigator (`sre_agent`), the first tool-using agent on this runtime.
+`docs/building-an-agent.md` is the step-by-step path it took, for the next one.
+
+## Kora agents
+
+The service publishes:
 
 - `nutrition-coach`: bounded free-text nutrition guidance;
 - `meal-planner`: validated structured meal plans of at most 62 days (two calendar months);
@@ -21,6 +28,24 @@ iteration, and wall-clock budgets. The gateway receives only non-sensitive
 capability/context headers so ExtProc can choose RTK for CLI-like text and
 Headroom for JSON, RAG, MCP, or conversation context.
 
+## SRE investigator
+
+`sre-investigator` investigates production symptoms in `tesseract-prod-in-gke`
+with six read-only Kubernetes tools — pods, container states, logs, events and
+deployments — and returns findings whose every claim cites the tool call that
+produced it, with a hypothesis, a confidence and actions for a human to take.
+
+It recommends and never acts. That is enforced three times over: no tool in the
+package changes state, the ServiceAccount holds a read ClusterRole that excludes
+Secrets, and tool output is treated as untrusted data, so a log line telling the
+model to reveal a token is reported as a finding rather than obeyed. A claimed
+incident without evidence fails validation instead of reaching a reader.
+
+`POST /v1/investigations` serves internal callers; `POST /a2a/v1/sre-investigator`
+serves the registry over A2A JSON-RPC. Both take a bearer key. Run its suite
+with `uv run python -m sre_agent.evaluation evals/sre-investigator.yaml`, which
+is the same gate the publish workflow applies before any manifest is sent.
+
 ## Configuration
 
 All settings use the `KORA_AGENTS_` prefix:
@@ -31,6 +56,19 @@ All settings use the `KORA_AGENTS_` prefix:
 | `KORA_AGENTS_GATEWAY_API_KEY` | Bearer key for `kora-ai` |
 | `KORA_AGENTS_GATEWAY_BASE_URL` | OpenAI-compatible gateway URL |
 | `KORA_AGENTS_GATEWAY_MODEL` | Gateway routing model name (`kora-auto`) |
+
+The investigator uses the `SRE_AGENT_` prefix:
+
+| Variable | Purpose |
+| --- | --- |
+| `SRE_AGENT_API_KEY` | Bearer key for the investigation and A2A endpoints |
+| `SRE_AGENT_GATEWAY_API_KEY` | Bearer key for `sre-ai` |
+| `SRE_AGENT_GATEWAY_BASE_URL` | OpenAI-compatible gateway URL |
+| `SRE_AGENT_GATEWAY_MODEL` | Gateway routing model name (`sre-auto`) |
+| `SRE_AGENT_CLUSTER_URL` | Kubernetes API server, `https://kubernetes.default.svc` in cluster |
+| `SRE_AGENT_CLUSTER_TOKEN_PATH` | Mounted ServiceAccount token |
+| `SRE_AGENT_CLUSTER_CA_PATH` | Mounted cluster CA |
+| `SRE_AGENT_NAMESPACES` | Optional JSON array narrowing what the agent may read |
 
 Raw keys belong in GitHub Actions or GCP Secret Manager, never in Git. Registry
 publishing uses `AGENTIC_REGISTRY_DEPLOY_KEY`; the registry stores only its
@@ -59,6 +97,9 @@ KORA_EVAL_END_USER_TOKEN=... \
 uv run python scripts/run_evals.py
 ```
 
-The container runs as UID/GID 65532 with a read-only-compatible filesystem.
-Kubernetes deployment is owned by `tesserix-k8s`; this repository publishes the
-image and the Agentic Registry manifests, but makes no imperative cluster change.
+The container runs as UID/GID 10001 with a read-only-compatible filesystem. One
+image serves both services: it defaults to `kora_agents.main:app`, and the SRE
+deployment overrides the command with `uvicorn sre_agent.main:app --host 0.0.0.0
+--port 8080 --no-access-log`. Kubernetes deployment is owned by `tesserix-k8s`;
+this repository publishes the image and the Agentic Registry manifests, but makes
+no imperative cluster change.
