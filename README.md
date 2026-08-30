@@ -62,19 +62,20 @@ The investigator uses the `SRE_AGENT_` prefix:
 | Variable | Purpose |
 | --- | --- |
 | `SRE_AGENT_API_KEY` | Bearer key for the investigation and A2A endpoints |
-| `SRE_AGENT_GATEWAY_API_KEY` | Bearer key for `sre-ai` |
-| `SRE_AGENT_GATEWAY_BASE_URL` | OpenAI-compatible gateway URL |
-| `SRE_AGENT_GATEWAY_MODEL` | Gateway routing model name (`sre-auto`) |
+| `SRE_AGENT_GATEWAY_API_KEY` | Workload credential presented to the shared model gateway |
+| `SRE_AGENT_GATEWAY_BASE_URL` | OpenAI-compatible shared model-gateway URL |
+| `SRE_AGENT_GATEWAY_MODEL` | Reviewed Vertex model name (`gemini-2.5-flash`) |
 | `SRE_AGENT_CLUSTER_URL` | Kubernetes API server, `https://kubernetes.default.svc` in cluster |
 | `SRE_AGENT_CLUSTER_TOKEN_PATH` | Mounted ServiceAccount token |
 | `SRE_AGENT_CLUSTER_CA_PATH` | Mounted cluster CA |
 | `SRE_AGENT_NAMESPACES` | Optional JSON array narrowing what the agent may read |
 
 Raw keys belong in GitHub Actions or GCP Secret Manager, never in Git. Registry
-publishing uses `AGENTIC_REGISTRY_DEPLOY_KEY`; the registry stores only its
-SHA-256 digest and limits it to the `kora` tenant. The publish workflow sends
-the opaque key in `X-Agentic-Registry-Deploy-Key`; `Authorization` is reserved
-for JWTs validated by the service mesh.
+publishing uses separate `AGENTIC_REGISTRY_DEPLOY_KEY` (Kora) and
+`AGENTIC_REGISTRY_SRE_DEPLOY_KEY` (Tesserix SRE) credentials. The Registry
+stores only their SHA-256 digests and limits each to its own tenant. The publish
+workflow sends the selected opaque key in `X-Agentic-Registry-Deploy-Key`;
+`Authorization` is reserved for JWTs validated by the service mesh.
 
 ## Development
 
@@ -97,9 +98,10 @@ KORA_EVAL_END_USER_TOKEN=... \
 uv run python scripts/run_evals.py
 ```
 
-The container runs as UID/GID 10001 with a read-only-compatible filesystem. One
-image serves both services: it defaults to `kora_agents.main:app`, and the SRE
-deployment overrides the command with `uvicorn sre_agent.main:app --host 0.0.0.0
---port 8080 --no-access-log`. Kubernetes deployment is owned by `tesserix-k8s`;
-this repository publishes the image and the Agentic Registry manifests, but makes
-no imperative cluster change.
+The containers run as UID/GID 10001 with a read-only-compatible filesystem.
+`kora-runtime` publishes `ghcr.io/tesserix/ai-agents`; `sre-runtime` publishes
+`ghcr.io/tesserix/ai-agents-sre`. Each image has its own fixed ASGI entrypoint,
+so deployment configuration cannot accidentally boot the other service.
+Kubernetes deployment is owned by `tesserix-k8s`; this repository publishes
+the images and Agentic Registry manifests, but makes no imperative cluster
+change.

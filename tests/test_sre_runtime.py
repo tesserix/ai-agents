@@ -1,5 +1,8 @@
+import asyncio
+
 import httpx
 import pytest
+from tesserix_adk.runtime import ModelRequest, ModelResponse
 from tesserix_adk.testing import FakeModelProvider, ScriptedTurn
 
 from k8s_fixtures import ReplayTransport, json_body, text_body
@@ -53,6 +56,30 @@ def service(*turns: ScriptedTurn) -> InvestigationService:
     return InvestigationService(provider=FakeModelProvider(*turns))
 
 
+class FinalTurnBarrier:
+    def __init__(self) -> None:
+        self._waiting = 0
+        self._release = asyncio.Event()
+
+    async def wait(self) -> None:
+        self._waiting += 1
+        if self._waiting == 2:
+            self._release.set()
+        await self._release.wait()
+
+
+class PausingProvider(FakeModelProvider):
+    def __init__(self, barrier: FinalTurnBarrier, *turns: ScriptedTurn) -> None:
+        super().__init__(*turns)
+        self._barrier = barrier
+
+    async def complete(self, request: ModelRequest) -> ModelResponse:
+        response = await super().complete(request)
+        if self.calls == 2:
+            await self._barrier.wait()
+        return response
+
+
 async def test_an_investigation_reads_the_cluster_then_answers_in_the_reviewed_shape() -> None:
     run = service(
         ScriptedTurn.calling("list_pods", {"namespace": "marketplace"}),
@@ -85,3 +112,50 @@ async def test_an_answer_that_is_not_an_investigation_is_a_failed_run() -> None:
 
     with pytest.raises(InvestigationFailedError):
         await run.investigate("What is wrong?")
+
+
+async def test_evidence_must_cite_a_tool_called_by_this_run() -> None:
+    run = service(ScriptedTurn.returning(FINDINGS))
+
+    with pytest.raises(InvestigationFailedError, match="get_pod_logs"):
+        await run.investigate("What is wrong?")
+
+
+async def test_concurrent_runs_keep_their_tool_trajectories_separate() -> None:
+    findings = {
+        **FINDINGS,
+        "incident_suspected": False,
+        "evidence": [
+            {
+                "tool": "list_pods",
+                "subject": "marketplace",
+                "observation": "The namespace has two pods.",
+            }
+        ],
+    }
+    barrier = FinalTurnBarrier()
+    shared_registry = tools.registry()
+    first = InvestigationService(
+        provider=PausingProvider(
+            barrier,
+            ScriptedTurn.calling("list_pods", {"namespace": "marketplace"}),
+            ScriptedTurn.returning(findings),
+        ),
+        tools=shared_registry,
+    )
+    second = InvestigationService(
+        provider=PausingProvider(
+            barrier,
+            ScriptedTurn.calling("list_pods", {"namespace": "marketplace"}),
+            ScriptedTurn.returning(findings),
+        ),
+        tools=shared_registry,
+    )
+
+    first_run, second_run = await asyncio.gather(
+        first.investigate("Check the first symptom."),
+        second.investigate("Check the second symptom."),
+    )
+
+    assert first_run.tools_called == ("list_pods",)
+    assert second_run.tools_called == ("list_pods",)

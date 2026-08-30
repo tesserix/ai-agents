@@ -224,6 +224,12 @@ def create_app(
     async def agents() -> dict[str, object]:
         return {"agents": [_card()]}
 
+    @app.get("/a2a/v1/{agent_name}/card", dependencies=[Depends(authenticate)])
+    async def agent_card(agent_name: str) -> dict[str, object]:
+        if agent_name != AGENT_NAME:
+            raise HTTPException(status_code=404, detail="agent not found")
+        return _card()
+
     def prompt_within_limit(prompt: str) -> str:
         if len(prompt) > settings.max_prompt_chars:
             raise HTTPException(status_code=422, detail="prompt exceeds configured limit")

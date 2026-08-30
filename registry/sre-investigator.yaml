@@ -15,9 +15,9 @@ spec:
   description: Investigates production symptoms with read-only cluster access and recommends what a human should do.
   model:
     provider: solo-agentgateway
-    name: sre-auto
+    name: gemini-2.5-flash
   a2a:
-    url: http://sre-ai.agentgateway-system.svc.cluster.local:8080/a2a/v1/sre-investigator
+    url: http://agentgateway-mcp.agentgateway-system.svc.cluster.local:8080/a2a/v1/sre-investigator
     preferredTransport: JSONRPC
     provider:
       organization: Tesserix
