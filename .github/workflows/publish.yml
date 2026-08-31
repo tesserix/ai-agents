@@ -90,19 +90,31 @@ jobs:
           REGISTRY_SRE_DEPLOY_KEY: ${{ secrets.AGENTIC_REGISTRY_SRE_DEPLOY_KEY }}
           REGISTRY_PUBLISH_URL: https://publish-aregistry.tesserix.app/v0/apply
         run: |
-          set -euo pipefail
-          if ! [[ "${REGISTRY_DEPLOY_KEY}" =~ ^([[:xdigit:]]{64}|[A-Za-z0-9_-]{72})$ ]]; then
+          set -eu
+          valid_deploy_key() {
+            deploy_key_candidate=$1
+            case "${#deploy_key_candidate}" in
+              64)
+                case "${deploy_key_candidate}" in *[!0-9A-Fa-f]*) return 1 ;; esac
+                ;;
+              72)
+                case "${deploy_key_candidate}" in *[!A-Za-z0-9_-]*) return 1 ;; esac
+                ;;
+              *) return 1 ;;
+            esac
+          }
+          if ! valid_deploy_key "${REGISTRY_DEPLOY_KEY}"; then
             echo "registry deploy key must be 64-character hex or 72-character URL-safe" >&2
             exit 1
           fi
-          if ! [[ "${REGISTRY_SRE_DEPLOY_KEY}" =~ ^([[:xdigit:]]{64}|[A-Za-z0-9_-]{72})$ ]]; then
+          if ! valid_deploy_key "${REGISTRY_SRE_DEPLOY_KEY}"; then
             echo "registry deploy key must be 64-character hex or 72-character URL-safe" >&2
             exit 1
           fi
           oidc_response=$(curl --silent --show-error --fail-with-body \
             -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=agentregistry-publisher.tesserix.app")
-          github_oidc_token=$(jq -er '.value' <<<"${oidc_response}")
+          github_oidc_token=$(printf '%s' "${oidc_response}" | jq -er '.value')
           response_file=$(mktemp)
           trap 'unset github_oidc_token oidc_response; rm -f "${response_file}"' EXIT
           for manifest in registry/*.yaml; do
@@ -110,7 +122,7 @@ jobs:
               registry/sre-investigator.yaml) deploy_key="${REGISTRY_SRE_DEPLOY_KEY}" ;;
               *) deploy_key="${REGISTRY_DEPLOY_KEY}" ;;
             esac
-            status=$(curl --silent --show-error \
+            publish_http_code=$(curl --silent --show-error \
               --retry 3 --retry-all-errors --max-time 30 \
               -H "User-Agent: Tesserix-Agent-Publisher/1.0 (+https://github.com/tesserix/ai-agents)" \
               -H "Accept: application/json" \
@@ -121,7 +133,7 @@ jobs:
               --output "${response_file}" \
               --write-out '%{http_code}' \
               "${REGISTRY_PUBLISH_URL}")
-            case "${status}" in
+            case "${publish_http_code}" in
               200) ;;
               207)
                 if ! jq -e 'all(.applied[]?; (.error // "") == "")' \
@@ -133,7 +145,7 @@ jobs:
                 fi
                 ;;
               *)
-                echo "registry publish failed for ${manifest} with HTTP ${status}" >&2
+                echo "registry publish failed for ${manifest} with HTTP ${publish_http_code}" >&2
                 cat "${response_file}" >&2
                 exit 1
                 ;;

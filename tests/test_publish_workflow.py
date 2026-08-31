@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -19,11 +20,33 @@ def test_registry_deploy_key_uses_mesh_safe_header() -> None:
 def test_registry_publish_validates_secret_without_printing_it() -> None:
     workflow = PUBLISH_WORKFLOW.read_text()
 
-    assert ('[[ "${REGISTRY_DEPLOY_KEY}" =~ ^([[:xdigit:]]{64}|[A-Za-z0-9_-]{72})$ ]]') in workflow
-    assert (
-        '[[ "${REGISTRY_SRE_DEPLOY_KEY}" =~ ^([[:xdigit:]]{64}|[A-Za-z0-9_-]{72})$ ]]'
-    ) in workflow
+    assert 'valid_deploy_key "${REGISTRY_DEPLOY_KEY}"' in workflow
+    assert 'valid_deploy_key "${REGISTRY_SRE_DEPLOY_KEY}"' in workflow
+    assert "*[!0-9A-Fa-f]*" in workflow
+    assert "*[!A-Za-z0-9_-]*" in workflow
     assert "deploy key must be 64-character hex or 72-character URL-safe" in workflow
+
+
+def test_registry_publish_script_is_valid_posix_shell() -> None:
+    job = yaml.safe_load(PUBLISH_WORKFLOW.read_text())["jobs"]["registry"]
+    publish = next(
+        step for step in job["steps"] if step.get("name") == "Publish reviewed Agent manifests"
+    )
+
+    script = publish["run"]
+    assert "pipefail" not in script
+    assert "[[" not in script
+    assert "<<<" not in script
+
+    result = subprocess.run(
+        ["/bin/sh", "-n"],
+        input=script,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_registry_publish_preserves_http_response_for_diagnostics() -> None:
