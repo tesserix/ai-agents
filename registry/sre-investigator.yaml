@@ -2,7 +2,7 @@ apiVersion: registry.agentic.dev/v1alpha1
 kind: Agent
 metadata:
   name: sre-investigator
-  namespace: sre
+  namespace: tesserix
   tenantId: tesserix
   tag: 1.0.0
   visibility: private
