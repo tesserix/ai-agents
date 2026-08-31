@@ -114,7 +114,8 @@ jobs:
           oidc_response=$(curl --silent --show-error --fail-with-body \
             -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=agentregistry-publisher.tesserix.app")
-          github_oidc_token=$(printf '%s' "${oidc_response}" | jq -er '.value')
+          github_oidc_token=$(printf '%s' "${oidc_response}" | \
+            python -c 'import json, sys; print(json.load(sys.stdin)["value"])')
           response_file=$(mktemp)
           trap 'unset github_oidc_token oidc_response; rm -f "${response_file}"' EXIT
           for manifest in registry/*.yaml; do
@@ -136,11 +137,23 @@ jobs:
             case "${publish_http_code}" in
               200) ;;
               207)
-                if ! jq -e 'all(.applied[]?; (.error // "") == "")' \
-                  "${response_file}" >/dev/null; then
+                if ! python - "${response_file}" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as response:
+              document = json.load(response)
+          errors = [
+              {key: entry.get(key) for key in ("kind", "name", "namespace", "error")}
+              for entry in document.get("applied") or []
+              if entry.get("error")
+          ]
+          if errors:
+              print(json.dumps({"errors": errors}, separators=(",", ":")), file=sys.stderr)
+              raise SystemExit(1)
+          PY
+                then
                   echo "registry partially rejected ${manifest}" >&2
-                  jq -c '{errors: [.applied[]? | select((.error // "") != "") | {kind, name, namespace, error}]}' \
-                    "${response_file}" >&2
                   exit 1
                 fi
                 ;;

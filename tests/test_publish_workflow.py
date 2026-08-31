@@ -49,6 +49,16 @@ def test_registry_publish_script_is_valid_posix_shell() -> None:
     assert result.returncode == 0, result.stderr
 
 
+def test_registry_publish_uses_the_runtime_python_for_json() -> None:
+    job = yaml.safe_load(PUBLISH_WORKFLOW.read_text())["jobs"]["registry"]
+    publish = next(
+        step for step in job["steps"] if step.get("name") == "Publish reviewed Agent manifests"
+    )
+
+    assert "jq" not in publish["run"]
+    assert "python -c" in publish["run"]
+
+
 def test_registry_publish_preserves_http_response_for_diagnostics() -> None:
     workflow = PUBLISH_WORKFLOW.read_text()
 
@@ -68,7 +78,9 @@ def test_registry_publish_rejects_partial_multistatus_failures() -> None:
 
     assert "200) ;;" in workflow
     assert "207)" in workflow
-    assert 'jq -e \'all(.applied[]?; (.error // "") == "")\'' in workflow
+    assert 'for entry in document.get("applied") or []' in workflow
+    assert 'if entry.get("error")' in workflow
+    assert "raise SystemExit(1)" in workflow
 
 
 def test_registry_publish_uses_repository_bound_oidc_route():
