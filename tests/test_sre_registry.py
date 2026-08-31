@@ -28,6 +28,7 @@ def test_the_agent_is_reachable_over_a2a_through_the_shared_gateway_route() -> N
 def test_a_cluster_reading_agent_is_not_published_to_the_world() -> None:
     assert MANIFEST["metadata"]["visibility"] == "private"
     assert MANIFEST["metadata"]["tenantId"] == "tesserix"
+    assert MANIFEST["metadata"]["namespace"] == MANIFEST["metadata"]["tenantId"]
     assert MANIFEST["metadata"]["labels"]["ai.tesserix.dev/access"] == "read-only"
 
 
