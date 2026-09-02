@@ -27,6 +27,8 @@ jobs:
             image: ghcr.io/tesserix/ai-agents
           - target: sre-runtime
             image: ghcr.io/tesserix/ai-agents-sre
+          - target: orchestrator-runtime
+            image: ghcr.io/tesserix/ai-agents-orchestrator
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -120,7 +122,7 @@ jobs:
           trap 'unset github_oidc_token oidc_response; rm -f "${response_file}"' EXIT
           for manifest in registry/*.yaml; do
             case "${manifest}" in
-              registry/sre-investigator.yaml) deploy_key="${REGISTRY_SRE_DEPLOY_KEY}" ;;
+              registry/sre-investigator.yaml|registry/supervisor.yaml|registry/orchestrator.yaml) deploy_key="${REGISTRY_SRE_DEPLOY_KEY}" ;;
               *) deploy_key="${REGISTRY_DEPLOY_KEY}" ;;
             esac
             publish_http_code=$(curl --silent --show-error \

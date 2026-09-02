@@ -1,0 +1,29 @@
+# The orchestrator makes no model call of its own; its behaviour is exercised by the
+# deterministic suite in tests/test_orchestration.py. These cases document the contract
+# a release must keep, in the same shape the model-backed suites use.
+suite: orchestrator
+cases:
+  - name: refuses a non-JSON task instead of guessing
+    input: plan my week
+    expectations:
+      error: unsupported_task
+
+  - name: refuses a step naming an unconfigured worker
+    input: '{"task": "delegate", "agent": "not-registered", "prompt": "hello"}'
+    expectations:
+      error: unsupported_task
+
+  - name: probes every configured worker for status
+    input: '{"task": "status"}'
+    expectations:
+      stepsEqualRoster: true
+
+  - name: stops a pipeline at the first rejected hand-off
+    input: '{"task": "pipeline", "steps": [{"agent": "a", "prompt": "draft"}, {"agent": "b", "prompt": "review"}]}'
+    expectations:
+      haltsOnRejection: true
+
+  - name: carries answers forward only inside the untrusted envelope
+    input: '{"task": "pipeline", "steps": [{"agent": "a", "prompt": "draft"}, {"agent": "b", "prompt": "refine", "carry_forward": true}]}'
+    expectations:
+      envelopeMarker: untrusted-data

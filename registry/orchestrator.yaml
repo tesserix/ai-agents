@@ -1,0 +1,42 @@
+apiVersion: registry.agentic.dev/v1alpha1
+kind: Agent
+metadata:
+  name: orchestrator
+  namespace: tesserix
+  tenantId: tesserix
+  tag: 1.0.0
+  visibility: public
+  labels:
+    app.kubernetes.io/part-of: agent-orchestration
+    ai.tesserix.dev/runtime: tesserix-adk
+    ai.tesserix.dev/access: read-only
+spec:
+  title: Tesserix Orchestrator
+  description: Product-agnostic orchestration of registered A2A agents. Routes a task through a configured worker roster step by step, carries each answer forward as labelled untrusted data, and has every hand-off supervised before anything is passed on.
+  model:
+    provider: solo-agentgateway
+    name: gemini-2.5-flash
+  a2a:
+    url: http://agentgateway-mcp.agentgateway-system.svc.cluster.local:8080/a2a/v1/orchestrator
+    preferredTransport: JSONRPC
+    provider:
+      organization: Tesserix
+      url: https://tesserix.app
+    capabilities:
+      streaming: false
+      pushNotifications: false
+    defaultInputModes: [application/json]
+    defaultOutputModes: [application/json]
+  skills:
+    - id: orchestrate-agent-pipeline
+      name: Orchestrate an Agent Pipeline
+      description: Runs an ordered pipeline of delegated steps across any product's registered agents, handing each worker only the prompt and context its step needs, carrying the previous answer forward inside an explicit untrusted-data envelope, and stopping the pipeline at the first step whose answer fails, is refused by a ceiling, or is rejected by the supervisor.
+      tags: [orchestration, delegation, pipeline, untrusted-data, multi-agent]
+    - id: delegate-single-task
+      name: Delegate a Single Task
+      description: Routes one task to one named registered agent under the run's delegation and wall-clock ceilings, has the supervisor judge the answer before it is returned, and reports the worker's run identity and outcome so a caller can trace exactly which agent produced what it received.
+      tags: [delegation, routing, supervision, traceability]
+    - id: probe-agent-fleet
+      name: Probe the Agent Fleet
+      description: Sends each configured worker its declared health probe over A2A and reports which agents answered, which failed and how, giving an operator or a calling agent one grounded view of whether every registered worker in the roster is currently able to do its job.
+      tags: [health-check, fleet, observability, a2a]

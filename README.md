@@ -5,9 +5,11 @@ Agent Gateway. The ADK is not a declared dependency: it comes preinstalled in
 `/opt/adk-venv` from `ghcr.io/tesserix/base-python-adk-3.14`, which pins the
 newest reviewed ADK release, so build and CI both run against that one version.
 
-Two services live here: the Kora agents (`kora_agents`) and the SRE
-investigator (`sre_agent`), the first tool-using agent on this runtime.
-`docs/building-an-agent.md` is the step-by-step path it took, for the next one.
+Three services live here: the Kora agents (`kora_agents`), the SRE
+investigator (`sre_agent`), and the global supervisor/orchestrator pair
+(`orchestrator_agent`), which belongs to the `tesserix` tenant and to no product.
+`docs/building-an-agent.md` is the step-by-step path the SRE agent took, for the
+next one.
 
 ## Kora agents
 
@@ -46,6 +48,28 @@ serves the registry over A2A JSON-RPC. Both take a bearer key. Run its suite
 with `uv run python -m sre_agent.evaluation evals/sre-investigator.yaml`, which
 is the same gate the publish workflow applies before any manifest is sent.
 
+## Supervisor and orchestrator
+
+`supervisor` and `orchestrator` are product-agnostic coordination agents any
+Tesserix service can reuse. Their skills are deliberately niche: the supervisor
+only judges another agent's answer (approve, amend or reject, with a confidence
+and a grounded summary), and the orchestrator only routes tasks across the
+worker roster its operator configured — it never answers a task itself.
+
+Information moves between agents under two rules. Every carried-forward answer
+crosses in an `<untrusted-data>` envelope, so a worker's output is data for the
+next worker, never instructions. And a supervised step's answer is passed on
+only after the supervisor approves it; a rejection stops the pipeline with the
+verdict in the report. Each run is bounded by the ADK delegation ledger
+(step-count ceilings, depth 1) and a monotonic wall-clock deadline.
+
+The task contract is JSON with three shapes — `status` probes every worker,
+`delegate` sends one prompt to one named worker, `pipeline` runs up to twelve
+supervised steps. `docs/agents/supervisor.md` and `docs/agents/orchestrator.md`
+are the definition documents other agents and operators read. An optional
+Temporal worker (`python -m orchestrator_agent.worker`) runs the same
+orchestrations durably on the `orchestrations` task queue.
+
 ## Configuration
 
 All settings use the `KORA_AGENTS_` prefix:
@@ -69,6 +93,20 @@ The investigator uses the `SRE_AGENT_` prefix:
 | `SRE_AGENT_CLUSTER_TOKEN_PATH` | Mounted ServiceAccount token |
 | `SRE_AGENT_CLUSTER_CA_PATH` | Mounted cluster CA |
 | `SRE_AGENT_NAMESPACES` | Optional JSON array narrowing what the agent may read |
+
+The orchestrator uses the `ORCHESTRATOR_` prefix:
+
+| Variable | Purpose |
+| --- | --- |
+| `ORCHESTRATOR_API_KEY` | Bearer key for the orchestration, supervision and A2A endpoints |
+| `ORCHESTRATOR_WORKER_API_KEY` | Bearer key presented to every worker A2A endpoint |
+| `ORCHESTRATOR_GATEWAY_API_KEY` | Workload credential presented to the shared model gateway |
+| `ORCHESTRATOR_GATEWAY_BASE_URL` | OpenAI-compatible shared model-gateway URL |
+| `ORCHESTRATOR_GATEWAY_MODEL` | Reviewed Vertex model name (`gemini-2.5-flash`) |
+| `ORCHESTRATOR_WORKERS` | JSON array of `{name, url, probe}` worker endpoints |
+| `ORCHESTRATOR_TEMPORAL_ADDRESS` | Temporal frontend; empty disables the durable worker |
+| `ORCHESTRATOR_TEMPORAL_NAMESPACE` | Temporal namespace (`default`) |
+| `ORCHESTRATOR_TEMPORAL_TASK_QUEUE` | Durable orchestration queue (`orchestrations`) |
 
 Raw keys belong in GitHub Actions or GCP Secret Manager, never in Git. Registry
 publishing uses separate `AGENTIC_REGISTRY_DEPLOY_KEY` (Kora) and
@@ -100,7 +138,8 @@ uv run python scripts/run_evals.py
 
 The containers run as UID/GID 10001 with a read-only-compatible filesystem.
 `kora-runtime` publishes `ghcr.io/tesserix/ai-agents`; `sre-runtime` publishes
-`ghcr.io/tesserix/ai-agents-sre`. Each image has its own fixed ASGI entrypoint,
+`ghcr.io/tesserix/ai-agents-sre`; `orchestrator-runtime` publishes
+`ghcr.io/tesserix/ai-agents-orchestrator`. Each image has its own fixed ASGI entrypoint,
 so deployment configuration cannot accidentally boot the other service.
 Kubernetes deployment is owned by `tesserix-k8s`; this repository publishes
 the images and Agentic Registry manifests, but makes no imperative cluster
