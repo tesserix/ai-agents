@@ -9,6 +9,7 @@ dependencies = [
   "pydantic>=2.11,<3",
   "pydantic-settings>=2.10,<3",
   "structlog>=25.4,<26",
+  "temporalio>=1.32,<2",
   "uvicorn>=0.35,<1",
 ]
 
@@ -28,7 +29,7 @@ requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/kora_agents", "src/sre_agent"]
+packages = ["src/kora_agents", "src/sre_agent", "src/orchestrator_agent"]
 
 
 [tool.pytest.ini_options]
@@ -49,13 +50,18 @@ select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "RUF"]
 [tool.mypy]
 python_version = "3.14"
 strict = true
-packages = ["kora_agents", "sre_agent"]
+packages = ["kora_agents", "sre_agent", "orchestrator_agent"]
 plugins = ["pydantic.mypy"]
 
 [tool.coverage.run]
-source = ["kora_agents", "sre_agent"]
+source = ["kora_agents", "sre_agent", "orchestrator_agent"]
 branch = true
-omit = ["src/kora_agents/main.py", "src/sre_agent/main.py"]
+omit = [
+  "src/kora_agents/main.py",
+  "src/sre_agent/main.py",
+  "src/orchestrator_agent/main.py",
+  "src/orchestrator_agent/worker.py",
+]
 
 [tool.coverage.report]
 fail_under = 90

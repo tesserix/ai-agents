@@ -134,6 +134,7 @@ def test_kora_and_sre_publish_as_distinct_runtime_images() -> None:
     assert job["strategy"]["matrix"]["include"] == [
         {"target": "kora-runtime", "image": "ghcr.io/tesserix/ai-agents"},
         {"target": "sre-runtime", "image": "ghcr.io/tesserix/ai-agents-sre"},
+        {"target": "orchestrator-runtime", "image": "ghcr.io/tesserix/ai-agents-orchestrator"},
     ]
     metadata = next(step for step in job["steps"] if step.get("id") == "meta")
     build = next(
@@ -153,5 +154,8 @@ def test_sre_publication_uses_a_separate_tenant_scoped_deploy_key() -> None:
         "${{ secrets.AGENTIC_REGISTRY_SRE_DEPLOY_KEY }}"
     )
     script = publish["run"]
-    assert 'registry/sre-investigator.yaml) deploy_key="${REGISTRY_SRE_DEPLOY_KEY}"' in script
+    assert (
+        "registry/sre-investigator.yaml|registry/supervisor.yaml|registry/orchestrator.yaml)"
+        ' deploy_key="${REGISTRY_SRE_DEPLOY_KEY}"' in script
+    )
     assert "X-Agentic-Registry-Deploy-Key: ${deploy_key}" in script
