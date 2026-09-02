@@ -31,5 +31,5 @@ jobs:
           enable-cache: true
       # Audit the resolved set CI installs, not a fresh resolution. The ADK itself
       # comes from the base image and is audited in base-docker-images.
-      - run: uv export --frozen --no-emit-project --no-hashes -o requirements.txt
-      - run: uvx pip-audit==2.9.0 -r requirements.txt --disable-pip
+      - run: uv export --frozen --no-emit-project -o requirements.txt
+      - run: uvx pip-audit==2.9.0 -r requirements.txt --disable-pip --require-hashes
