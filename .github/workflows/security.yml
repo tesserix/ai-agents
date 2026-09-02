@@ -1,0 +1,35 @@
+name: Security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # An advisory published the day after a merge is not caught by a merge trigger.
+    - cron: "41 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  advisories:
+    name: advisories against the lock
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.5"
+          enable-cache: true
+      # Audit the resolved set CI installs, not a fresh resolution. The ADK itself
+      # comes from the base image and is audited in base-docker-images.
+      - run: uv export --frozen --no-emit-project -o requirements.txt
+      - run: uvx pip-audit==2.9.0 -r requirements.txt --disable-pip --require-hashes
