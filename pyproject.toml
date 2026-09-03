@@ -31,7 +31,13 @@ requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/agent_telemetry", "src/kora_agents", "src/sre_agent", "src/orchestrator_agent"]
+packages = [
+  "src/agent_telemetry",
+  "src/document_agent",
+  "src/kora_agents",
+  "src/sre_agent",
+  "src/orchestrator_agent",
+]
 
 
 [tool.pytest.ini_options]
@@ -52,11 +58,11 @@ select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "RUF"]
 [tool.mypy]
 python_version = "3.14"
 strict = true
-packages = ["agent_telemetry", "kora_agents", "sre_agent", "orchestrator_agent"]
+packages = ["agent_telemetry", "document_agent", "kora_agents", "sre_agent", "orchestrator_agent"]
 plugins = ["pydantic.mypy"]
 
 [tool.coverage.run]
-source = ["agent_telemetry", "kora_agents", "sre_agent", "orchestrator_agent"]
+source = ["agent_telemetry", "document_agent", "kora_agents", "sre_agent", "orchestrator_agent"]
 branch = true
 omit = [
   "src/kora_agents/main.py",
