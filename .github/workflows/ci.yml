@@ -13,27 +13,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    # Verify inside the image production runs: the ADK comes from the base, not the lock.
-    container:
-      image: ghcr.io/tesserix/base-python-adk-3.14:20260829@sha256:5a6fd1863ed7f37f3929cc596d0ec063c3077c11713cd334f14d1df2b30ef386
-      # The base image runs as uid 10001; the runner's work dir is root-owned.
-      options: --user root
-    env:
-      UV_PROJECT_ENVIRONMENT: /opt/adk-venv
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-        with:
-          version: "0.12.5"
-          enable-cache: true
-      - run: uv sync --frozen --inexact
-      - run: uv run --no-sync ruff format --check .
-      - run: uv run --no-sync ruff check .
-      - run: uv run --no-sync mypy --strict src/
-      - run: uv run --no-sync pytest --cov --cov-fail-under=90
-      - run: uv build
+  quality:
+    uses: tesserix/tesserix-workflows/.github/workflows/python-baked-deps-ci.yml@8a269caaf014b3e053a29b40902484236323414a
+    with:
+      container_image: ghcr.io/tesserix/base-python-adk-3.14:20260829@sha256:5a6fd1863ed7f37f3929cc596d0ec063c3077c11713cd334f14d1df2b30ef386
+      uv_version: "0.12.5"
+      source_directory: src
+      coverage_min_lines: 90
+
+  secret-scan:
+    uses: tesserix/tesserix-workflows/.github/workflows/secret-scan.yml@8a269caaf014b3e053a29b40902484236323414a
