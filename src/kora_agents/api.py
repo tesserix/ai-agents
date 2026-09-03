@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
+from agent_telemetry import bound_session
 from kora_agents.config import Settings
 from kora_agents.execution import AgentService, ExecutionResult
 from kora_agents.identity import INBOUND_DELEGATED_IDENTITY_HEADER, delegated_end_user_token
@@ -140,8 +141,10 @@ def create_app(
         request_id = secrets.token_hex(16)
         request.state.request_id = request_id
         started = time.perf_counter()
+        session_id = request.headers.get("X-Session-ID", "")[:128] or request_id
         try:
-            response = await call_next(request)
+            with bound_session(session_id):
+                response = await call_next(request)
         except BaseException as error:
             logger.error(
                 "request_failed",

@@ -1,5 +1,6 @@
 """Production ASGI application: the roster, the gateway and both runtimes, wired once."""
 
+from agent_telemetry import TelemetrySettings, build_recorder
 from kora_agents.logging import configure_logging
 from orchestrator_agent.api import create_app
 from orchestrator_agent.config import Settings
@@ -15,7 +16,8 @@ client = A2AWorkerClient(
     api_key=settings.worker_api_key,
     timeout=settings.step_timeout_seconds,
 )
-supervisor = SupervisorService(provider=provider)
+recorder = build_recorder(TelemetrySettings())
+supervisor = SupervisorService(provider=provider, recorder=recorder)
 orchestrator = OrchestratorService(
     workers={worker.name: worker for worker in settings.workers},
     client=client,
@@ -27,6 +29,7 @@ orchestrator = OrchestratorService(
 
 async def shutdown() -> None:
     """Drop the worker connections before the model one, so no call outlives the run."""
+    recorder.shutdown()
     await client.aclose()
     await provider.aclose()
 

@@ -15,6 +15,7 @@ from tesserix_adk.core import RunEventKind
 from tesserix_adk.guardrails import InjectionGuard, PIIGuard
 from tesserix_adk.runtime import AgentRunner
 
+from agent_telemetry import NoopRecorder, Recorder
 from sre_agent.definitions import INVESTIGATOR, Investigation
 from sre_agent.tools import registry
 
@@ -70,10 +71,12 @@ class InvestigationService:
         provider: ModelProvider,
         definition: AgentDefinition[Investigation] = INVESTIGATOR,
         tools: ToolRegistry | None = None,
+        recorder: Recorder | None = None,
     ) -> None:
         self._provider = provider
         self._definition = definition
         self._tools = tools if tools is not None else registry()
+        self._recorder = recorder if recorder is not None else NoopRecorder()
 
     async def investigate(self, prompt: str, *, tenant: str = DEFAULT_TENANT) -> InvestigationRun:
         """Investigate `prompt` and return the findings with the reads behind them.
@@ -92,6 +95,7 @@ class InvestigationService:
             },
         )
         run = await runner.run(self._definition, prompt, tenant=tenant)
+        self._recorder.record(run)
         if run.state.value != "completed" or not isinstance(run.output, Investigation):
             raise InvestigationFailedError(run.state.value, _why_it_ended(run.events))
         result = InvestigationRun(

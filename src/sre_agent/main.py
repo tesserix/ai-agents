@@ -1,5 +1,6 @@
 """Production ASGI application: the cluster, the gateway and the agent, wired once."""
 
+from agent_telemetry import TelemetrySettings, build_recorder
 from kora_agents.logging import configure_logging
 from sre_agent import tools
 from sre_agent.api import create_app
@@ -18,12 +19,14 @@ client = cluster_client(
 )
 tools.use_cluster(KubernetesReader(client, namespaces=settings.namespaces))
 provider = gateway_provider(settings)
-service = InvestigationService(provider=provider)
+recorder = build_recorder(TelemetrySettings())
+service = InvestigationService(provider=provider, recorder=recorder)
 
 
 async def shutdown() -> None:
     """Drop the cluster connection before the model one, so no read outlives the run."""
     tools.use_cluster(None)
+    recorder.shutdown()
     await client.aclose()
     await provider.aclose()
 

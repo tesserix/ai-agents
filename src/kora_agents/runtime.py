@@ -8,6 +8,7 @@ from tesserix_adk.core import AgentDefinition, Message, ModelProvider, TextPart
 from tesserix_adk.guardrails import InjectionGuard, PIIGuard
 from tesserix_adk.runtime import AgentRunner
 
+from agent_telemetry import NoopRecorder, Recorder
 from kora_agents.execution import ExecutionResult
 from kora_agents.safety import MedicalSafetyGuard
 
@@ -44,9 +45,11 @@ class RuntimeAgentService:
         *,
         definitions: Mapping[str, AgentDefinition[Any]],
         providers: ProviderFactory,
+        recorder: Recorder | None = None,
     ) -> None:
         self._definitions = dict(definitions)
         self._providers = providers
+        self._recorder = recorder if recorder is not None else NoopRecorder()
 
     async def run(self, agent_name: str, prompt: str, *, tenant: str) -> ExecutionResult:
         definition = self._definitions.get(agent_name)
@@ -61,6 +64,7 @@ class RuntimeAgentService:
             },
         )
         run = await runner.run(definition, prompt, tenant=tenant)
+        self._recorder.record(run)
         if run.state.value != "completed":
             raise ExecutionFailedError(run.state.value)
         output: str | dict[str, object]

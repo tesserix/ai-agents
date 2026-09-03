@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
+from agent_telemetry import bound_session
 from sre_agent.config import Settings
 from sre_agent.definitions import INVESTIGATOR, Investigation
 from sre_agent.runtime import InvestigationFailedError, InvestigationRun
@@ -161,8 +162,10 @@ def create_app(
         request_id = secrets.token_hex(16)
         request.state.request_id = request_id
         started = time.perf_counter()
+        session_id = request.headers.get("X-Session-ID", "")[:128] or request_id
         try:
-            response = await call_next(request)
+            with bound_session(session_id):
+                response = await call_next(request)
         except BaseException as error:
             logger.error(
                 "request_failed",

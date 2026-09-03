@@ -113,6 +113,24 @@ The orchestrator uses the `ORCHESTRATOR_` prefix:
 | `ORCHESTRATOR_TEMPORAL_NAMESPACE` | Temporal namespace (`default`) |
 | `ORCHESTRATOR_TEMPORAL_TASK_QUEUE` | Durable orchestration queue (`orchestrations`) |
 
+Every service traces each ADK run to Langfuse through the shared `agent_telemetry`
+package (`AGENT_TELEMETRY_` prefix). Tracing is fail-open: an unreachable
+collector never fails a request. Trace and span ids derive from the ADK run id,
+message content is never exported, and each product lands in its own Langfuse
+project because the collector routes on `service.namespace`.
+
+| Variable | Purpose |
+| --- | --- |
+| `AGENT_TELEMETRY_ENDPOINT` | OTLP/HTTP traces URL; empty disables tracing |
+| `AGENT_TELEMETRY_PRODUCT` | Product routing key and Langfuse project (`kora`, `sre`, `orchestrator`) |
+| `AGENT_TELEMETRY_SERVICE_NAME` | `service.name` on every span |
+| `AGENT_TELEMETRY_ENVIRONMENT` | Langfuse environment (`prod`) |
+| `AGENT_TELEMETRY_RELEASE` | Image tag, recorded as the Langfuse release |
+| `AGENT_TELEMETRY_PUBLIC_KEY` / `_SECRET_KEY` | Optional Basic-auth pair for sending straight to Langfuse instead of the collector |
+
+An `X-Session-ID` request header becomes the Langfuse session; without one the
+request id is used.
+
 Raw keys belong in GitHub Actions or GCP Secret Manager, never in Git. Registry
 publishing uses separate `AGENTIC_REGISTRY_DEPLOY_KEY` (Kora) and
 `AGENTIC_REGISTRY_SRE_DEPLOY_KEY` (Tesserix SRE) credentials. The Registry
