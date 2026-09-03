@@ -1,14 +1,19 @@
 """Strict agent boundary for untrusted Document Intelligence results."""
 
+import json
 from enum import StrEnum
-from typing import Annotated, Literal, assert_never
+from typing import Annotated, Final, Literal, assert_never
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 OpaqueUploadID = Annotated[str, Field(pattern=r"^upl_[A-Za-z0-9_]{1,64}$")]
 OpaqueJobID = Annotated[str, Field(pattern=r"^job_[A-Za-z0-9_]{1,64}$")]
 DocumentVersion = Annotated[str, Field(pattern=r"^sha256:[a-f0-9]{64}$")]
 ObservationID = Annotated[str, Field(pattern=r"^obs_[A-Za-z0-9_]{1,64}$")]
+OpaqueDocumentID = Annotated[str, Field(pattern=r"^doc_[A-Za-z0-9_]{1,64}$")]
+TableID = Annotated[str, Field(pattern=r"^tbl_[A-Za-z0-9_]{1,64}$")]
+StableCode = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
+VersionName = Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")]
 Coordinate = Annotated[float, Field(ge=0, le=1)]
 Point = tuple[Coordinate, Coordinate]
 DocumentType = Literal[
@@ -91,14 +96,108 @@ class ExtractedField(ContractModel):
     confidence: Annotated[float, Field(ge=0, le=1)]
     citations: Annotated[list[Citation], Field(min_length=1, max_length=100)]
 
+    @field_validator("value_json")
+    @classmethod
+    def value_is_strict_json(cls, value: str) -> str:
+        def reject_constant(constant: str) -> None:
+            raise ValueError(f"non-finite JSON constant {constant} is not allowed")
+
+        json.loads(value, parse_constant=reject_constant)
+        return value
+
+
+class TableCell(ContractModel):
+    row: Annotated[int, Field(ge=0)]
+    column: Annotated[int, Field(ge=0)]
+    text: Annotated[str, Field(max_length=1_000_000)]
+    confidence: Annotated[float, Field(ge=0, le=1)]
+    citations: Annotated[list[Citation], Field(min_length=1, max_length=100)]
+
+
+class Table(ContractModel):
+    table_id: TableID
+    cells: Annotated[list[TableCell], Field(min_length=1, max_length=10_000)]
+
+
+class Confidence(ContractModel):
+    input_quality: Annotated[float, Field(ge=0, le=1)]
+    ocr: Annotated[float, Field(ge=0, le=1)]
+    classification: Annotated[float, Field(ge=0, le=1)]
+    extraction: Annotated[float, Field(ge=0, le=1)]
+    validation: Annotated[float, Field(ge=0, le=1)]
+    overall: Annotated[float, Field(ge=0, le=1)]
+
+
+class ValidationFailure(ContractModel):
+    code: StableCode
+    severity: Literal["warning", "error"]
+
+
+class Cost(ContractModel):
+    currency: Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
+    decimal: Annotated[str, Field(pattern=r"^[0-9]+(?:\.[0-9]+)?$")]
+
 
 class DocumentResult(ContractModel):
     job_id: OpaqueJobID
     status: JobStatus
     content_trust: Literal["untrusted"]
-    fields: Annotated[list[ExtractedField], Field(max_length=5_000)]
-    warnings: Annotated[list[str], Field(max_length=500)] = Field(default_factory=list)
-    validation_failures: Annotated[list[str], Field(max_length=500)] = Field(default_factory=list)
+    result_schema_version: Literal["1.0"] | None = None
+    document_id: OpaqueDocumentID | None = None
+    document_version: DocumentVersion | None = None
+    text: Annotated[str, Field(max_length=8_000_000)] = ""
+    markdown: Annotated[str, Field(max_length=8_000_000)] = ""
+    fields: Annotated[list[ExtractedField], Field(max_length=5_000)] = Field(default_factory=list)
+    tables: Annotated[list[Table], Field(max_length=100)] = Field(default_factory=list)
+    confidence: Confidence | None = None
+    citations: Annotated[list[Citation], Field(max_length=10_000)] = Field(default_factory=list)
+    warnings: Annotated[list[StableCode], Field(max_length=500)] = Field(default_factory=list)
+    validation_failures: Annotated[list[ValidationFailure], Field(max_length=500)] = Field(
+        default_factory=list
+    )
+    provider: VersionName | None = None
+    model_version: VersionName | None = None
+    processing_profile_version: VersionName | None = None
+    duration_ms: Annotated[int, Field(ge=0)] | None = None
+    cost: Cost | None = None
+
+    @model_validator(mode="after")
+    def result_evidence_is_consistent(self) -> DocumentResult:
+        terminal_with_result = self.status in {"completed", "partial", "review_required"}
+        if terminal_with_result and (
+            self.result_schema_version is None
+            or self.document_id is None
+            or self.document_version is None
+        ):
+            raise ValueError("result-bearing status requires immutable document identity")
+        if (self.text or self.markdown) and not self.citations:
+            raise ValueError("document content requires source citations")
+        evidence = [*self.citations]
+        evidence.extend(citation for field in self.fields for citation in field.citations)
+        evidence.extend(
+            citation for table in self.tables for cell in table.cells for citation in cell.citations
+        )
+        if self.document_version is not None and any(
+            citation.document_version != self.document_version for citation in evidence
+        ):
+            raise ValueError("citation document version does not match result")
+        return self
+
+
+class ReviewPolicy(ContractModel):
+    minimum_overall_confidence: Annotated[float, Field(ge=0, le=1)] = 0.85
+    minimum_critical_field_confidence: Annotated[float, Field(ge=0, le=1)] = 0.90
+    required_fields: frozenset[Annotated[str, Field(min_length=1, max_length=200)]] = frozenset()
+    critical_fields: frozenset[Annotated[str, Field(min_length=1, max_length=200)]] = frozenset()
+    review_warning_codes: frozenset[StableCode] = frozenset(
+        {
+            "illegible_document",
+            "incomplete_document",
+            "low_input_quality",
+            "provider_disagreement",
+            "unknown_document_type",
+        }
+    )
 
 
 class ProcessingDecision(StrEnum):
@@ -108,7 +207,12 @@ class ProcessingDecision(StrEnum):
     COMPLETE = "complete"
 
 
-def decide(result: DocumentResult) -> ProcessingDecision:
+DEFAULT_REVIEW_POLICY: Final = ReviewPolicy()
+
+
+def decide(
+    result: DocumentResult, policy: ReviewPolicy = DEFAULT_REVIEW_POLICY
+) -> ProcessingDecision:
     match result.status:
         case "accepted" | "inspecting" | "processing" | "validating" | "cancelling":
             return ProcessingDecision.WAIT
@@ -117,16 +221,41 @@ def decide(result: DocumentResult) -> ProcessingDecision:
         case "cancelled" | "rejected":
             return ProcessingDecision.REJECT
         case "completed":
+            fields = {field.name: field for field in result.fields}
+            if (
+                result.confidence is None
+                or result.confidence.overall < policy.minimum_overall_confidence
+            ):
+                return ProcessingDecision.REVIEW
+            if any(failure.severity == "error" for failure in result.validation_failures):
+                return ProcessingDecision.REVIEW
+            if set(result.warnings) & policy.review_warning_codes:
+                return ProcessingDecision.REVIEW
+            if not policy.required_fields.issubset(fields):
+                return ProcessingDecision.REVIEW
+            if any(
+                name not in fields
+                or fields[name].confidence < policy.minimum_critical_field_confidence
+                for name in policy.critical_fields
+            ):
+                return ProcessingDecision.REVIEW
             return ProcessingDecision.COMPLETE
         case unreachable:
             assert_never(unreachable)
 
 
 __all__ = [
+    "DEFAULT_REVIEW_POLICY",
     "Citation",
+    "Confidence",
+    "Cost",
     "DocumentRequest",
     "DocumentResult",
     "ExtractedField",
     "ProcessingDecision",
+    "ReviewPolicy",
+    "Table",
+    "TableCell",
+    "ValidationFailure",
     "decide",
 ]
