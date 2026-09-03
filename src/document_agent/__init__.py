@@ -5,6 +5,7 @@ from document_agent.contracts import (
     Citation,
     Confidence,
     Cost,
+    DocumentPage,
     DocumentRequest,
     DocumentResult,
     ExtractedField,
@@ -12,6 +13,7 @@ from document_agent.contracts import (
     ReviewPolicy,
     Table,
     TableCell,
+    TextObservation,
     ValidationFailure,
     decide,
 )
@@ -21,6 +23,7 @@ __all__ = [
     "Citation",
     "Confidence",
     "Cost",
+    "DocumentPage",
     "DocumentRequest",
     "DocumentResult",
     "ExtractedField",
@@ -28,6 +31,7 @@ __all__ = [
     "ReviewPolicy",
     "Table",
     "TableCell",
+    "TextObservation",
     "ValidationFailure",
     "decide",
 ]

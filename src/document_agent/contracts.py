@@ -90,6 +90,62 @@ class Citation(ContractModel):
         return self
 
 
+class TextObservation(ContractModel):
+    observation_id: ObservationID
+    level: Literal["page", "paragraph", "line", "word"]
+    text: Annotated[str, Field(min_length=1, max_length=65_536)]
+    confidence: Annotated[float, Field(ge=0, le=1)]
+    polygon: Annotated[list[Point], Field(min_length=3, max_length=16)]
+    reading_order: Annotated[int, Field(ge=0)]
+    parent_observation_id: ObservationID | None = None
+
+    @field_validator("text")
+    @classmethod
+    def text_is_not_whitespace(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("observation text must not be whitespace")
+        return value
+
+    @model_validator(mode="after")
+    def polygon_has_area(self) -> TextObservation:
+        area = sum(
+            left[0] * right[1] - right[0] * left[1]
+            for left, right in zip(self.polygon, self.polygon[1:] + self.polygon[:1], strict=True)
+        )
+        if abs(area) <= 1e-12:
+            raise ValueError("observation polygon must have non-zero area")
+        if self.parent_observation_id == self.observation_id:
+            raise ValueError("observation cannot parent itself")
+        return self
+
+
+class DocumentPage(ContractModel):
+    page: Annotated[int, Field(ge=1)]
+    width: Annotated[int, Field(ge=1)]
+    height: Annotated[int, Field(ge=1)]
+    observations: Annotated[list[TextObservation], Field(max_length=100_000)] = Field(
+        default_factory=list
+    )
+
+    @model_validator(mode="after")
+    def observation_hierarchy_is_ordered_and_unique(self) -> DocumentPage:
+        seen_ids: set[str] = set()
+        seen_orders: set[int] = set()
+        for observation in self.observations:
+            if observation.observation_id in seen_ids:
+                raise ValueError("observation identifiers must be unique per page")
+            if observation.reading_order in seen_orders:
+                raise ValueError("observation reading order must be unique per page")
+            if (
+                observation.parent_observation_id is not None
+                and observation.parent_observation_id not in seen_ids
+            ):
+                raise ValueError("observation parent must precede its child")
+            seen_ids.add(observation.observation_id)
+            seen_orders.add(observation.reading_order)
+        return self
+
+
 class ExtractedField(ContractModel):
     name: Annotated[str, Field(min_length=1, max_length=200)]
     value_json: Annotated[str, Field(min_length=1, max_length=100_000)]
@@ -147,6 +203,7 @@ class DocumentResult(ContractModel):
     document_version: DocumentVersion | None = None
     text: Annotated[str, Field(max_length=8_000_000)] = ""
     markdown: Annotated[str, Field(max_length=8_000_000)] = ""
+    pages: Annotated[list[DocumentPage], Field(max_length=300)] = Field(default_factory=list)
     fields: Annotated[list[ExtractedField], Field(max_length=5_000)] = Field(default_factory=list)
     tables: Annotated[list[Table], Field(max_length=100)] = Field(default_factory=list)
     confidence: Confidence | None = None
@@ -181,6 +238,9 @@ class DocumentResult(ContractModel):
             citation.document_version != self.document_version for citation in evidence
         ):
             raise ValueError("citation document version does not match result")
+        page_numbers = [page.page for page in self.pages]
+        if len(page_numbers) != len(set(page_numbers)):
+            raise ValueError("page numbers must be unique")
         return self
 
 
@@ -249,6 +309,7 @@ __all__ = [
     "Citation",
     "Confidence",
     "Cost",
+    "DocumentPage",
     "DocumentRequest",
     "DocumentResult",
     "ExtractedField",
@@ -256,6 +317,7 @@ __all__ = [
     "ReviewPolicy",
     "Table",
     "TableCell",
+    "TextObservation",
     "ValidationFailure",
     "decide",
 ]
