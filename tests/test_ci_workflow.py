@@ -6,28 +6,37 @@ ADK_BASE = (
     "ghcr.io/tesserix/base-python-adk-3.14:20260829"
     "@sha256:5a6fd1863ed7f37f3929cc596d0ec063c3077c11713cd334f14d1df2b30ef386"
 )
+WORKFLOWS_REVISION = "8a269caaf014b3e053a29b40902484236323414a"
 
 
-def _verify_job() -> dict:
-    return yaml.safe_load(Path(".github/workflows/ci.yml").read_text())["jobs"]["verify"]
+def _ci_jobs() -> dict:
+    return yaml.safe_load(Path(".github/workflows/ci.yml").read_text())["jobs"]
 
 
-def test_ci_runs_from_the_environment_created_by_frozen_sync() -> None:
-    commands = [step["run"] for step in _verify_job()["steps"] if "run" in step]
-    verification_commands = [command for command in commands if command.startswith("uv run ")]
+def test_ci_reuses_the_reviewed_python_workflow_at_an_immutable_revision() -> None:
+    job = _ci_jobs()["quality"]
 
-    assert verification_commands
-    assert all(command.startswith("uv run --no-sync ") for command in verification_commands)
+    assert job["uses"] == (
+        "tesserix/tesserix-workflows/.github/workflows/python-baked-deps-ci.yml"
+        f"@{WORKFLOWS_REVISION}"
+    )
+    assert job["with"] == {
+        "container_image": ADK_BASE,
+        "uv_version": "0.12.5",
+        "source_directory": "src",
+        "coverage_min_lines": 90,
+    }
+    assert "secrets" not in job
 
 
-def test_ci_verifies_inside_the_adk_base_image() -> None:
-    job = _verify_job()
-    commands = [step["run"] for step in job["steps"] if "run" in step]
+def test_ci_reuses_the_reviewed_secret_scan_without_inheriting_secrets() -> None:
+    job = _ci_jobs()["secret-scan"]
 
-    assert job["container"]["image"] == ADK_BASE
-    assert job["env"]["UV_PROJECT_ENVIRONMENT"] == "/opt/adk-venv"
-    # Without --inexact the sync prunes the ADK, which the lock deliberately omits.
-    assert any(command.startswith("uv sync ") and "--inexact" in command for command in commands)
+    assert job == {
+        "uses": (
+            f"tesserix/tesserix-workflows/.github/workflows/secret-scan.yml@{WORKFLOWS_REVISION}"
+        )
+    }
 
 
 def test_the_runtime_image_uses_the_same_immutable_adk_base() -> None:
