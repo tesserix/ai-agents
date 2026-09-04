@@ -70,7 +70,7 @@ jobs:
     timeout-minutes: 15
     # Verify inside the image production runs: the ADK comes from the base, not the lock.
     container:
-      image: ghcr.io/tesserix/base-python-adk-3.14:weekly@sha256:4e38ff684b5c9936b855cac13aa71db619de23bca6d379d01e6156c4f402a56b
+      image: ghcr.io/tesserix/base-python-adk-3.14:20260904@sha256:4e38ff684b5c9936b855cac13aa71db619de23bca6d379d01e6156c4f402a56b
       options: --user root
     env:
       UV_PROJECT_ENVIRONMENT: /opt/adk-venv

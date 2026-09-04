@@ -3,7 +3,7 @@
 [![CI](https://github.com/tesserix/ai-agents/actions/workflows/ci.yml/badge.svg)](https://github.com/tesserix/ai-agents/actions/workflows/ci.yml)
 [![Publish](https://github.com/tesserix/ai-agents/actions/workflows/publish.yml/badge.svg)](https://github.com/tesserix/ai-agents/actions/workflows/publish.yml)
 [![Security](https://github.com/tesserix/ai-agents/actions/workflows/security.yml/badge.svg)](https://github.com/tesserix/ai-agents/actions/workflows/security.yml)
-[![ADK base](https://img.shields.io/badge/tesserix--adk-v0.53.1_(base_20260829)-blue)](https://github.com/tesserix/agent-development-kit/releases/tag/v0.53.1)
+[![ADK base](https://img.shields.io/badge/tesserix--adk-v0.54.0_(base_20260904)-blue)](https://github.com/tesserix/agent-development-kit/releases/tag/v0.54.0)
 
 Deployable AI agents, built on `tesserix-adk` and routed only through the Solo
 Agent Gateway. The ADK is not a declared dependency: it comes preinstalled in

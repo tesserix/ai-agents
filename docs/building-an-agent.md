@@ -14,7 +14,7 @@ can get wrong.
 Start from the base image, not from `python:3.14`:
 
 ```dockerfile
-FROM ghcr.io/tesserix/base-python-adk-3.14:20260829@sha256:5a6fd1863ed7f37f3929cc596d0ec063c3077c11713cd334f14d1df2b30ef386
+FROM ghcr.io/tesserix/base-python-adk-3.14:20260904@sha256:4e38ff684b5c9936b855cac13aa71db619de23bca6d379d01e6156c4f402a56b
 ```
 
 The ADK is private and pre-1.0. It is preinstalled in `/opt/adk-venv`, which is
