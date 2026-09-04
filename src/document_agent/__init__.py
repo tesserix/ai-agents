@@ -17,15 +17,27 @@ from document_agent.contracts import (
     ValidationFailure,
     decide,
 )
+from document_agent.runtime import (
+    AustralisToolUnavailable,
+    DocumentAgentResponse,
+    DocumentAgentService,
+    DocumentAgentState,
+    DocumentTool,
+)
 
 __all__ = [
     "DEFAULT_REVIEW_POLICY",
+    "AustralisToolUnavailable",
     "Citation",
     "Confidence",
     "Cost",
+    "DocumentAgentResponse",
+    "DocumentAgentService",
+    "DocumentAgentState",
     "DocumentPage",
     "DocumentRequest",
     "DocumentResult",
+    "DocumentTool",
     "ExtractedField",
     "ProcessingDecision",
     "ReviewPolicy",
