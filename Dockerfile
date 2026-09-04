@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.18
-ARG BASE_IMAGE=ghcr.io/tesserix/base-python-adk-3.14:20260829@sha256:5a6fd1863ed7f37f3929cc596d0ec063c3077c11713cd334f14d1df2b30ef386
+ARG BASE_IMAGE=ghcr.io/tesserix/base-python-adk-3.14:weekly@sha256:4e38ff684b5c9936b855cac13aa71db619de23bca6d379d01e6156c4f402a56b
 ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.12.5@sha256:e85be844203885286c60ffad8a858d48afb6c5a5c237ca0e67f12e74b8f174b1
 
 FROM ${UV_IMAGE} AS uv
