@@ -3,7 +3,7 @@ from pathlib import Path
 import yaml
 
 ADK_BASE = (
-    "ghcr.io/tesserix/base-python-adk-3.14:weekly"
+    "ghcr.io/tesserix/base-python-adk-3.14:20260904"
     "@sha256:4e38ff684b5c9936b855cac13aa71db619de23bca6d379d01e6156c4f402a56b"
 )
 WORKFLOWS_REVISION = "8a269caaf014b3e053a29b40902484236323414a"
