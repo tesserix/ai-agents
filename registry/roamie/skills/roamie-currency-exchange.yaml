@@ -4,7 +4,7 @@ metadata:
   name: roamie-currency-exchange
   namespace: roamie
   tenantId: roamie
-  tag: 1.0.6
+  tag: 1.1.0
   visibility: public
   labels:
     app.kubernetes.io/part-of: roamie

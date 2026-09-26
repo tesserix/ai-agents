@@ -41,7 +41,7 @@ def gateway_provider(
         ),
         api_key_variable="ROAMIE_MODEL_KEY",
         secrets=GatewaySecrets(settings),
-        timeout=40,
+        timeout=60,
         transport=GatewayTransport(tokens, origin=settings.gateway_base_url, transport=transport),
     )
 
@@ -60,12 +60,12 @@ async def source_session(
         max_tools=6,
         max_result_bytes=65536,
         max_message_bytes=131072,
-        read_timeout_seconds=8,
-        timeout_seconds=8,
+        read_timeout_seconds=25,
+        timeout_seconds=25,
     )
     async with (
         httpx.AsyncClient(
-            timeout=8, trust_env=False, follow_redirects=False, transport=transport
+            timeout=25, trust_env=False, follow_redirects=False, transport=transport
         ) as client,
         httpx.AsyncClient(
             timeout=8, trust_env=False, follow_redirects=False, transport=weather_transport

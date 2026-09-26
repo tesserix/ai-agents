@@ -24,6 +24,29 @@
         "title": "Location",
         "type": "object"
       },
+      "PlanningStay": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "maximum": 14,
+            "minimum": 1,
+            "title": "Days",
+            "type": "integer"
+          },
+          "destination": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Destination",
+            "type": "string"
+          }
+        },
+        "required": [
+          "destination",
+          "days"
+        ],
+        "title": "PlanningStay",
+        "type": "object"
+      },
       "RecommendationRequest": {
         "additionalProperties": false,
         "properties": {
@@ -167,6 +190,11 @@
             "title": "Photo Ids",
             "type": "array"
           },
+          "plan_options": {
+            "default": false,
+            "title": "Plan Options",
+            "type": "boolean"
+          },
           "preferences": {
             "default": [],
             "items": {
@@ -196,6 +224,22 @@
             ],
             "default": null,
             "title": "Start Date"
+          },
+          "stays": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/PlanningStay"
+            },
+            "maxItems": 4,
+            "title": "Stays",
+            "type": "array"
+          },
+          "travellers": {
+            "default": 1,
+            "maximum": 12,
+            "minimum": 1,
+            "title": "Travellers",
+            "type": "integer"
           }
         },
         "required": [
@@ -322,6 +366,19 @@
             "default": null,
             "title": "Currency"
           },
+          "destination": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Destination"
+          },
           "dietary_tags": {
             "default": [],
             "items": {
@@ -440,6 +497,15 @@
             ],
             "default": null,
             "title": "Photo Id"
+          },
+          "place_kind": {
+            "default": "place",
+            "enum": [
+              "place",
+              "accommodation"
+            ],
+            "title": "Place Kind",
+            "type": "string"
           },
           "price_is_estimate": {
             "default": true,
@@ -771,6 +837,29 @@
           "title": "Location",
           "type": "object"
         },
+        "PlanningStay": {
+          "additionalProperties": false,
+          "properties": {
+            "days": {
+              "maximum": 14,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            },
+            "destination": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Destination",
+              "type": "string"
+            }
+          },
+          "required": [
+            "destination",
+            "days"
+          ],
+          "title": "PlanningStay",
+          "type": "object"
+        },
         "RecommendationRequest": {
           "additionalProperties": false,
           "properties": {
@@ -907,6 +996,11 @@
               "title": "Photo Ids",
               "type": "array"
             },
+            "plan_options": {
+              "default": false,
+              "title": "Plan Options",
+              "type": "boolean"
+            },
             "preferences": {
               "default": [],
               "items": {
@@ -934,6 +1028,22 @@
               ],
               "default": null,
               "title": "Start Date"
+            },
+            "stays": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/PlanningStay"
+              },
+              "maxItems": 4,
+              "title": "Stays",
+              "type": "array"
+            },
+            "travellers": {
+              "default": 1,
+              "maximum": 12,
+              "minimum": 1,
+              "title": "Travellers",
+              "type": "integer"
             }
           },
           "required": [
@@ -1055,6 +1165,19 @@
               "default": null,
               "title": "Currency"
             },
+            "destination": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Destination"
+            },
             "dietary_tags": {
               "default": [],
               "items": {
@@ -1168,6 +1291,15 @@
               ],
               "default": null,
               "title": "Photo Id"
+            },
+            "place_kind": {
+              "default": "place",
+              "enum": [
+                "place",
+                "accommodation"
+              ],
+              "title": "Place Kind",
+              "type": "string"
             },
             "price_is_estimate": {
               "default": true,

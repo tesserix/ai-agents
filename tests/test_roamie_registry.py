@@ -31,7 +31,7 @@ def test_roamie_definitions_are_discoverable_without_enabling_routes():
         for path in Path("registry/roamie").glob(pattern):
             document = yaml.safe_load(path.read_text())
             assert document["metadata"]["visibility"] == "public"
-            assert document["metadata"]["tag"] == "1.0.6"
+            assert document["metadata"]["tag"] == "1.1.0"
             assert document["metadata"]["labels"]["agent.tesserix.app/gateway-export"] == "false"
 
 
@@ -47,19 +47,19 @@ def test_roamie_agents_resolve_pinned_runtime_and_dependencies():
         )
         released = {
             "ai-agents-roamie-manager": (
-                "sha256:c2aad4bd3c8c59ad5eae1c70591ebb8bb4e9d1e83c0ab079d72b077c29025857"
+                "sha256:fb0a043f0e6b8015f86c2bfa5b560ca4afee2dda4090f945f3411b332bbb0b00"
             ),
             "ai-agents-roamie": (
-                "sha256:7deb690266a9a0e558db304966c35a56b52bc4638e010d7f2e25528a60271c6c"
+                "sha256:eba4d1257cc1239063ee9ebf1b0e58caf4dfad3e7e5cd2eece30066e6cf0cb96"
             ),
         }
         assert spec["runtime"]["image"] == f"ghcr.io/tesserix/{image_name}@{released[image_name]}"
         assert spec["runtime"]["type"] == "container"
         assert "@sha256:" in spec["runtime"]["image"]
         assert len(spec["runtime"]["image"].split("@sha256:")[1]) == 64
-        assert spec["skills"] == [{"ref": name, "version": "1.0.6"}]
-        assert spec["tools"] == [{"ref": "roamie-travel-search", "version": "1.0.1"}]
-        assert spec["mcpServers"] == [{"ref": "roamie-travel-mcp", "version": "1.0.1"}]
+        assert spec["skills"] == [{"ref": name, "version": "1.1.0"}]
+        assert spec["tools"] == [{"ref": "roamie-travel-search", "version": "1.1.0"}]
+        assert spec["mcpServers"] == [{"ref": "roamie-travel-mcp", "version": "1.1.0"}]
 
 
 def test_published_manager_skill_matches_runtime_review_instructions():

@@ -25,6 +25,7 @@ from roamie_agents.contracts import (
 from roamie_agents.delegation import DelegationError, Delegations, WorkerPayload
 from roamie_agents.discovery import RegistryWorkers
 from roamie_agents.exchange import CURRENCY_EXPONENTS, ExchangeQuote, ReferenceRate, compare_quotes
+from roamie_agents.planning import validate_options
 from roamie_agents.runtime import TravelFailure, TravelService
 
 
@@ -103,7 +104,7 @@ class PersonalTripManager:
         exchange_quotes: list[ExchangeQuote] | None = None,
     ) -> ManagedResponse:
         try:
-            async with asyncio.timeout(120):
+            async with asyncio.timeout(78):
                 with principal_scope(
                     Principal(
                         subject=self.manager_id(profile),
@@ -190,7 +191,13 @@ class PersonalTripManager:
                 supporting = [fact for fact in facts if fact.category == kind]
                 if supporting:
                     advisory = await self._manage(
-                        profile, current_revision, kind, bounded, supporting, None, None
+                        profile,
+                        current_revision,
+                        kind,
+                        bounded.model_copy(update={"plan_options": False}),
+                        supporting,
+                        None,
+                        None,
                     )
                     advisories.append(advisory.response)
                 else:
@@ -294,6 +301,38 @@ class PersonalTripManager:
                 > bounded.budget_minor
             ):
                 raise TravelFailure("budget_exceeded")
+        if bounded.plan_options:
+            if specialist != Specialist.TRIP or response.status != "ok":
+                raise TravelFailure("planning_unavailable")
+            try:
+                validate_options(
+                    response.trip_options,
+                    start=bounded.start_date,
+                    end=bounded.end_date,
+                    evidence_ids={
+                        fact.id
+                        for fact in candidates
+                        if fact.id in seen
+                        and fact.category not in (Specialist.WEATHER, Specialist.ENTRY)
+                    },
+                    ceiling=bounded.budget_minor,
+                    destinations=[
+                        stay.destination for stay in bounded.stays for _ in range(stay.days)
+                    ]
+                    or None,
+                    evidence_destinations={fact.id: fact.destination for fact in candidates},
+                )
+            except ValueError as error:
+                raise TravelFailure("invalid_trip_options") from error
+            lodging_ids = {fact.id for fact in candidates if fact.place_kind == "accommodation"}
+            if any(
+                key not in lodging_ids
+                for option in response.trip_options
+                for key in option.accommodation_ids
+            ):
+                raise TravelFailure("unsupported_accommodation")
+        elif response.trip_options:
+            raise TravelFailure("unexpected_trip_options")
         reviewed = await self._supervisor.supervise(
             task=bounded.prompt,
             answer=response.model_dump_json(),
@@ -330,6 +369,14 @@ class PersonalTripManager:
                 "limitations": (
                     "Reviewed against your trip preferences and available provider evidence.",
                     "Prices, availability and travel times may change; confirm before visiting.",
+                    *(
+                        (
+                            "Budgets are AI planning allocations for the party, not live quotes; "
+                            "international flights excluded.",
+                        )
+                        if bounded.plan_options
+                        else ()
+                    ),
                     *response.limitations,
                 )
             }

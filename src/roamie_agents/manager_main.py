@@ -30,14 +30,14 @@ tokens = workload_tokens(settings, "roamie-trip-manager")
 authority = ProfileAuthority(key=settings.api_key)
 provider = gateway_provider(settings, tokens=tokens)
 worker_http = httpx.AsyncClient(
-    timeout=50,
+    timeout=65,
     trust_env=False,
     follow_redirects=False,
     transport=GatewayTransport(tokens, origin=settings.a2a_gateway_origin),
 )
 worker_client = A2AWorkerClient(
     api_key=SecretStr("workload-credential-injected-by-transport"),
-    timeout=50,
+    timeout=65,
     client=worker_http,
 )
 registry_http = httpx.AsyncClient(timeout=2, trust_env=False, follow_redirects=False)

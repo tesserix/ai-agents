@@ -14,8 +14,9 @@ from roamie_agents.contracts import (
     TravelResponse,
     project,
 )
-from roamie_agents.definitions import DEFINITIONS
+from roamie_agents.definitions import DEFINITIONS, planning_definition
 from roamie_agents.exchange import CURRENCY_EXPONENTS, ExchangeQuote, ReferenceRate, compare_quotes
+from roamie_agents.planning import PlanSelection, validate_options
 
 
 class TravelFailure(Exception):
@@ -76,7 +77,8 @@ class TravelService:
                 specialist=specialist,
                 limitations=("No current matching provider evidence.",),
             )
-        definition = DEFINITIONS[specialist]
+        planning = request.plan_options and specialist == Specialist.TRIP
+        definition = planning_definition() if planning else DEFINITIONS[specialist]
         runner = AgentRunner(
             provider=self._provider[specialist]
             if isinstance(self._provider, Mapping)
@@ -93,10 +95,69 @@ class TravelService:
         )
         if len(prompt.encode()) > 48000:
             raise TravelFailure("evidence_too_large")
-        run = await runner.run(definition, prompt, tenant="roamie")
-        if run.state.value != "completed" or not isinstance(run.output, Selection):
+        output: Selection | PlanSelection | None
+        if planning:
+            plan_run = await runner.run(planning_definition(), prompt, tenant="roamie")
+            output, state, run_id = plan_run.output, plan_run.state.value, plan_run.id
+        else:
+            selection_run = await runner.run(DEFINITIONS[specialist], prompt, tenant="roamie")
+            output, state, run_id = (
+                selection_run.output,
+                selection_run.state.value,
+                selection_run.id,
+            )
+        if planning and state == "completed" and isinstance(output, PlanSelection):
+            try:
+                validate_options(
+                    output.options,
+                    start=request.start_date,
+                    end=request.end_date,
+                    evidence_ids={
+                        fact.id
+                        for fact in eligible
+                        if fact.category not in (Specialist.WEATHER, Specialist.ENTRY)
+                    },
+                    ceiling=request.budget_minor,
+                    destinations=[
+                        stay.destination for stay in request.stays for _ in range(stay.days)
+                    ]
+                    or None,
+                    evidence_destinations={fact.id: fact.destination for fact in eligible},
+                )
+            except ValueError as error:
+                raise TravelFailure(str(error)) from error
+            selected_ids = {
+                stop.evidence_id
+                for option in output.options
+                for day in option.days
+                for stop in day.stops
+            }
+            selected_ids.update(
+                key for option in output.options for key in option.accommodation_ids
+            )
+            lodging_ids = {fact.id for fact in eligible if fact.place_kind == "accommodation"}
+            if any(
+                key not in lodging_ids
+                for option in output.options
+                for key in option.accommodation_ids
+            ):
+                raise TravelFailure("unsupported_accommodation")
+            return TravelResponse(
+                status="ok",
+                specialist=specialist,
+                recommendations=tuple(
+                    project(fact, request.origin) for fact in eligible if fact.id in selected_ids
+                ),
+                trip_options=output.options,
+                run_id=run_id,
+                limitations=(
+                    "Proposed visits and AI budget allocations; not live prices or bookings.",
+                    "International flights excluded. Confirm hotels, routes and opening hours.",
+                ),
+            )
+        if state != "completed" or not isinstance(output, Selection):
             raise TravelFailure("model_failed")
-        ids = run.output.selected_ids
+        ids = output.selected_ids
         by_id = {fact.id: fact for fact in eligible}
         if len(ids) != len(set(ids)) or any(key not in by_id for key in ids):
             raise TravelFailure("unsupported_citation")
@@ -118,7 +179,7 @@ class TravelService:
             limitations=(
                 "Ranked among returned sources; unknown prices and times remain unknown.",
             ),
-            run_id=run.id,
+            run_id=run_id,
         )
 
     @staticmethod
@@ -132,6 +193,7 @@ class TravelService:
             return False
         if (
             not planning_fact
+            and not (request.plan_options and specialist == Specialist.TRIP)
             and request.start_date
             and request.end_date
             and (

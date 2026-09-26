@@ -177,7 +177,7 @@ def test_roamie_mcp_publication_uses_a_pinned_release_and_scoped_identity() -> N
     )
     assert checkout["if"] == "github.event_name == 'push' || inputs.publish_roamie"
     assert checkout["with"]["repository"] == "tesserix/roamie"
-    assert checkout["with"]["ref"] == "a0eb6de4c7f652b797c4613c331bc65b1d0ff5ff"
+    assert checkout["with"]["ref"] == "4d80d899e9a4c77ff05732d51f37a19eed2a7f80"
     assert checkout["with"]["persist-credentials"] is False
     publish = next(
         step for step in job["steps"] if step.get("name") == "Publish reviewed Agent manifests"

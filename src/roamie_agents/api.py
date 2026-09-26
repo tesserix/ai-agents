@@ -127,7 +127,7 @@ def create_app(
         if slots.locked():
             raise HTTPException(429, "capacity exceeded")
         async with slots:
-            async with asyncio.timeout(55):
+            async with asyncio.timeout(60):
                 with principal_scope(identity.principal):
                     result = await service.recommend(
                         specialist,
