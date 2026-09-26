@@ -26,14 +26,14 @@ class RegistryWorkers:
 
     async def find(self, specialist: Specialist) -> WorkerEndpoint:
         peer = await self._peers.find(
-            PeerNeed(agent=f"roamie-{specialist.value}", version="1.1.4", tenant="roamie")
+            PeerNeed(agent=f"roamie-{specialist.value}", version="1.1.5", tenant="roamie")
         )
         return WorkerEndpoint(name=peer.card.agent, url=peer.card.audience)
 
     async def _fetch(self, need: PeerNeed) -> Sequence[Mapping[str, Any]]:
         async with self._client.stream(
             "GET",
-            f"{self._registry}/v0/agents/{need.agent}-agent/1.1.4/resolved",
+            f"{self._registry}/v0/agents/{need.agent}-agent/1.1.5/resolved",
             params={"namespace": "roamie"},
             timeout=2,
             follow_redirects=False,
@@ -47,13 +47,13 @@ class RegistryWorkers:
         document = json.loads(body)
         agent = document["agent"]
         expected = {
-            "skills": (need.agent, "1.1.4"),
+            "skills": (need.agent, "1.1.5"),
             "tools": ("roamie-travel-search", "1.1.0"),
             "mcpServers": ("roamie-travel-mcp", "1.1.0"),
         }
         if document.get("unresolved"):
             raise ValueError("registry dependencies unresolved")
-        self._identity(agent, f"{need.agent}-agent", "1.1.4")
+        self._identity(agent, f"{need.agent}-agent", "1.1.5")
         for kind, (name, version) in expected.items():
             entries = document["resolved"][kind]
             if len(entries) != 1:
@@ -63,7 +63,7 @@ class RegistryWorkers:
         if endpoint != f"{self._gateway}/a2a/v1/{need.agent}":
             raise ValueError("registry endpoint outside permitted gateway route")
         return [
-            AgentCard(agent=need.agent, audience=endpoint, version="1.1.4").model_dump(mode="json")
+            AgentCard(agent=need.agent, audience=endpoint, version="1.1.5").model_dump(mode="json")
         ]
 
     @staticmethod

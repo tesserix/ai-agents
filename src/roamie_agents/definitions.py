@@ -102,7 +102,9 @@ def manager_definition() -> AgentDefinition[Verdict]:
                     "that all three options address the trip, differ usefully, fit the spending "
                     "ceiling, cite the supplied places and do not claim confirmed bookings. "
                     "Never answer the task yourself or add facts. Return a verdict with "
-                    "concrete issues; do not approve a response with unresolved violations."
+                    "concrete issues; do not approve a response with unresolved violations. "
+                    "Keep the verdict summary to one or two sentences, at most 500 characters. "
+                    "Put detailed findings in issues (at most 10), not in summary."
                 ),
             }
         ),
