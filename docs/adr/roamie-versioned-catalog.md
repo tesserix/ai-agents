@@ -29,3 +29,10 @@ answer is served after expiry. Registry calls have a two-second deadline and a
 any URL outside the exact configured gateway route stop invocation. No profile
 data or workload credential is sent to the catalog. Static maps remain available
 only to isolated local callers; production manager startup selects discovery.
+
+Catalog revision 1.0.4 pins the released ADK 0.54.1 manager and specialist images,
+including negotiated MCP sessions and the gateway-only model configuration.
+Their signed HTTP contracts remain compatible with the manager's explicitly
+approved worker graph at 1.0.2; the travel Tool and MCP stay at 1.0.1. Publishing
+these candidate manifests does not enable customer traffic or change the
+production workload image pins.

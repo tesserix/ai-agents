@@ -4,7 +4,7 @@ metadata:
   name: roamie-trip-manager-agent
   namespace: roamie
   tenantId: roamie
-  tag: 1.0.3
+  tag: 1.0.4
   visibility: public
   labels:
     app.kubernetes.io/part-of: roamie
@@ -25,13 +25,13 @@ spec:
   runtime:
     type: container
     protocol: http
-    image: ghcr.io/tesserix/ai-agents-roamie-manager@sha256:edd62baa2eeab02300e8329ae5acfc44a21a9c9e1617dfcbaa9c7b7610bebc9b
+    image: ghcr.io/tesserix/ai-agents-roamie-manager@sha256:f6ec1e250e00d8bc86bbe37d3d03c1f0e8ae9c1b9d54c97a844fc06f76b85471
     port: 8080
     path: /v1/trip-manager
     healthPath: /healthz
   skills:
   - ref: roamie-trip-manager
-    version: 1.0.3
+    version: 1.0.4
   tools:
   - ref: roamie-travel-search
     version: 1.0.1
