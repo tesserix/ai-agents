@@ -93,7 +93,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Read released Roamie MCP manifest
-        if: inputs.publish_roamie
+        if: github.event_name == 'push' || inputs.publish_roamie
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tesserix/roamie
@@ -111,7 +111,7 @@ jobs:
       - name: Publish reviewed Agent manifests
         env:
           REGISTRY_DEPLOY_KEY: ${{ secrets.AGENTIC_REGISTRY_DEPLOY_KEY }}
-          PUBLISH_ROAMIE: ${{ inputs.publish_roamie }}
+          PUBLISH_ROAMIE: ${{ github.event_name == 'push' || inputs.publish_roamie }}
           REGISTRY_ROAMIE_DEPLOY_KEY: ${{ secrets.AGENTIC_REGISTRY_ROAMIE_DEPLOY_KEY }}
           REGISTRY_SRE_DEPLOY_KEY: ${{ secrets.AGENTIC_REGISTRY_SRE_DEPLOY_KEY }}
           REGISTRY_PUBLISH_URL: https://publish-aregistry.tesserix.app/v0/apply
