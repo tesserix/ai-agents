@@ -46,11 +46,23 @@ class Profile(Contract):
     selected_photo_ids: Annotated[tuple[str, ...], Field(max_length=15)] = ()
 
 
+def planning_dates(profile: Profile, request: RecommendationRequest) -> dict[str, date | None]:
+    start, end = request.start_date or profile.start_date, request.end_date or profile.end_date
+    if (
+        (start and profile.start_date and start < profile.start_date)
+        or (end and profile.end_date and end > profile.end_date)
+        or (start and end and end < start)
+    ):
+        raise TravelFailure("dates_outside_trip")
+    return {"start_date": start, "end_date": end}
+
+
 class ManagedResponse(Contract):
     manager_id: str
     profile_revision: str
     response: TravelResponse
     review_run_ids: tuple[str, str]
+    advisories: tuple[TravelResponse, ...] = ()
 
 
 async def revision_value(check: Callable[[], str | Awaitable[str]]) -> str:
@@ -161,8 +173,7 @@ class PersonalTripManager:
             ),
             preferences=tuple(dict.fromkeys((*profile.preferences, *request.preferences))),
             language=profile.language,
-            start_date=profile.start_date or request.start_date,
-            end_date=profile.end_date or request.end_date,
+            **planning_dates(profile, request),
             photo_consent=profile.photo_consent and request.photo_consent,
         )
         if request.currency != profile.currency and request.budget_minor is not None:
@@ -174,6 +185,34 @@ class PersonalTripManager:
         if set(request.photo_ids) - set(profile.selected_photo_ids):
             raise TravelFailure("photo_not_authorized")
         bounded = RecommendationRequest.model_validate(effective)
+        advisories: list[TravelResponse] = []
+        if specialist == Specialist.TRIP:
+            for kind in (Specialist.WEATHER, Specialist.ENTRY):
+                supporting = [fact for fact in facts if fact.category == kind]
+                if supporting:
+                    advisory = await self._manage(
+                        profile,
+                        current_revision,
+                        kind,
+                        bounded.model_copy(update={"plan_options": False}),
+                        supporting,
+                        None,
+                        None,
+                    )
+                    advisories.append(advisory.response)
+                else:
+                    advisories.append(
+                        TravelResponse(
+                            specialist=kind,
+                            status="unavailable",
+                            limitations=(
+                                (
+                                    "This planning check could not be verified. "
+                                    "Check official sources before booking."
+                                ),
+                            ),
+                        )
+                    )
         candidates = [
             fact
             for fact in facts
@@ -188,6 +227,7 @@ class PersonalTripManager:
             raise TravelFailure("invalid_evidence")
         context = json.dumps(
             {
+                "planning_checks": [item.model_dump(mode="json") for item in advisories],
                 "preferences": bounded.model_dump(mode="json", exclude={"prompt"}),
                 "evidence": [fact.model_dump(mode="json") for fact in candidates],
                 "reference_rate": reference_rate.model_dump(mode="json")
@@ -269,7 +309,12 @@ class PersonalTripManager:
                     response.trip_options,
                     start=bounded.start_date,
                     end=bounded.end_date,
-                    evidence_ids=seen,
+                    evidence_ids={
+                        fact.id
+                        for fact in candidates
+                        if fact.id in seen
+                        and fact.category not in (Specialist.WEATHER, Specialist.ENTRY)
+                    },
                     ceiling=bounded.budget_minor,
                     destinations=[
                         stay.destination for stay in bounded.stays for _ in range(stay.days)
@@ -332,6 +377,7 @@ class PersonalTripManager:
                         if bounded.plan_options
                         else ()
                     ),
+                    *response.limitations,
                 )
             }
         )
@@ -340,4 +386,5 @@ class PersonalTripManager:
             profile_revision=profile.revision,
             response=clean,
             review_run_ids=(preflight.run_id, reviewed.run_id),
+            advisories=tuple(advisories),
         )

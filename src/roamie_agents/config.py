@@ -22,6 +22,7 @@ class Settings(BaseSettings):
             raise ValueError("each agent requires a distinct workload identity")
         return self
 
+    weather_api_key: SecretStr | None = None
     gateway_base_url: str = "http://ai-gateway.agentgateway-system.svc.cluster.local:8080/roamie/v1"
     gateway_model: str = "roamie-auto"
     mcp_gateway_origin: str = "https://mcp.tesserix.app"

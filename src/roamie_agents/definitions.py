@@ -5,8 +5,24 @@ from roamie_agents.contracts import Selection, Specialist
 from roamie_agents.planning import PlanSelection
 
 INSTRUCTIONS = {
+    Specialist.WEATHER: (
+        "Review all dated weather evidence and its coverage summary. Retain "
+        "missing-date warnings. Suggest indoor alternatives when supported; never"
+        " call a climate average a forecast or imply weather guarantees safety."
+    ),
+    Specialist.ENTRY: (
+        "Review official entry-planning guidance. Retain all missing-information "
+        "warnings. Never infer visa eligibility, fees, exemptions or legal "
+        "requirements from official links alone. Fees remain in the issuing "
+        "authority currency; never invent conversions."
+    ),
     Specialist.EXCHANGE: "Explain deterministic exchange comparisons; preserve all rates and fees.",
-    Specialist.TRIP: "Select places for a feasible trip respecting dates, budget and preferences.",
+    Specialist.TRIP: (
+        "Select places for a feasible trip respecting dates, budget and "
+        "preferences. Consult supplied weather and entry evidence, retain indoor "
+        "alternatives for rain, and never select weather or entry-guidance IDs as"
+        " places."
+    ),
     Specialist.FOOD: "Select restaurants matching cuisine, dietary needs and budget.",
     Specialist.ROUTES: "Select transport options by sourced duration, cost and accessibility.",
     Specialist.ACTIVITIES: "Select experiences matching interests, dates and budget.",
@@ -102,6 +118,8 @@ def planning_definition() -> AgentDefinition[PlanSelection]:
             version="1.1.0",
             model="roamie-auto",
             instructions=(
+                "Consult supplied weather and entry evidence; "
+                "never schedule those checks as visits. "
                 "Create exactly three distinct proposed trips in order: budget, balanced, premium. "
                 "Use only supplied EVIDENCE IDs for stops. Respect profile, party, destination, "
                 "dates, diets, allergies and accessibility. When stays are supplied, preserve "

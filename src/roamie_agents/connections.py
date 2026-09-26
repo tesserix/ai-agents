@@ -8,8 +8,11 @@ from tesserix_adk.models.providers import OpenAICompatibleProvider
 
 from roamie_agents.api import Source
 from roamie_agents.config import Settings
-from roamie_agents.evidence import MCPSource
+from roamie_agents.contracts import RecommendationRequest, Specialist
+from roamie_agents.evidence import EvidenceBatch, MCPSource
+from roamie_agents.guidance import EntryGuidanceSource
 from roamie_agents.oauth import GatewayTransport, WorkloadTokens
+from roamie_agents.weather import GoogleWeatherSource
 
 
 class GatewaySecrets:
@@ -44,7 +47,11 @@ def gateway_provider(
 
 
 async def source_session(
-    settings: Settings, token: str, *, transport: httpx.AsyncBaseTransport | None = None
+    settings: Settings,
+    token: str,
+    *,
+    transport: httpx.AsyncBaseTransport | None = None,
+    weather_transport: httpx.AsyncBaseTransport | None = None,
 ) -> AsyncIterator[Source]:
     config = McpServerConfig(
         name="roamie-travel-mcp",
@@ -56,9 +63,14 @@ async def source_session(
         read_timeout_seconds=25,
         timeout_seconds=25,
     )
-    async with httpx.AsyncClient(
-        timeout=25, trust_env=False, follow_redirects=False, transport=transport
-    ) as client:
+    async with (
+        httpx.AsyncClient(
+            timeout=25, trust_env=False, follow_redirects=False, transport=transport
+        ) as client,
+        httpx.AsyncClient(
+            timeout=8, trust_env=False, follow_redirects=False, transport=weather_transport
+        ) as weather_client,
+    ):
         session = TransportSession(
             HttpTransport(
                 config,
@@ -68,10 +80,13 @@ async def source_session(
             config=config,
         )
         try:
-            yield MCPSource(
-                session=session,
-                tool_name=settings.mcp_tool,
-                schema_digest=settings.mcp_schema_digest,
+            yield PlanningSources(
+                MCPSource(
+                    session=session,
+                    tool_name=settings.mcp_tool,
+                    schema_digest=settings.mcp_schema_digest,
+                ),
+                GoogleWeatherSource(weather_client, settings.weather_api_key),
             )
         finally:
             await session.close()
@@ -81,3 +96,17 @@ def workload_tokens(settings: Settings, agent: str) -> WorkloadTokens:
     if agent not in settings.gateway_clients:
         raise ValueError(f"missing workload identity for {agent}")
     return WorkloadTokens(agent=agent, client=settings.gateway_clients[agent])
+
+
+class PlanningSources:
+    def __init__(self, travel: MCPSource, weather: GoogleWeatherSource) -> None:
+        self.travel = travel
+        self.weather = weather
+        self.entry = EntryGuidanceSource()
+
+    async def search(self, specialist: Specialist, request: RecommendationRequest) -> EvidenceBatch:
+        if specialist == Specialist.WEATHER:
+            return await self.weather.search(specialist, request)
+        if specialist == Specialist.ENTRY:
+            return await self.entry.search(specialist, request)
+        return await self.travel.search(specialist, request)

@@ -80,6 +80,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      packages: read
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # Verify inside the image production runs: the ADK comes from the base, not the lock.
@@ -108,6 +109,10 @@ jobs:
       # No manifest reaches the registry unless every evaluation case still holds.
       - name: Gate the publish on the evaluation suite
         run: uv run --no-sync python -m sre_agent.evaluation evals/sre-investigator.yaml
+      - name: Pin Roamie registry to built images
+        env:
+          GHCR_READ_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: uv run --no-sync python scripts/pin_roamie_release.py
       - name: Publish reviewed Agent manifests
         env:
           REGISTRY_DEPLOY_KEY: ${{ secrets.AGENTIC_REGISTRY_DEPLOY_KEY }}

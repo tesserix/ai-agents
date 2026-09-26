@@ -9,7 +9,7 @@ def test_roamie_agents_reference_published_skills():
     skills = {
         yaml.safe_load(p.read_text())["metadata"]["name"] for p in (root / "skills").glob("*.yaml")
     }
-    assert len(skills) == 8
+    assert len(skills) == 10
     for agent in agents:
         assert agent["spec"]["skills"][0]["ref"] in skills
 
@@ -22,7 +22,7 @@ def test_roamie_catalog_names_are_unique_across_kinds():
         for p in root.glob(pattern)
     ]
     keys = [(d["metadata"]["namespace"], d["metadata"]["name"]) for d in documents]
-    assert len(keys) == 16
+    assert len(keys) == 20
     assert len(set(keys)) == len(keys)
 
 

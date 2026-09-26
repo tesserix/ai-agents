@@ -1,7 +1,7 @@
 apiVersion: registry.agentic.dev/v1alpha1
 kind: Agent
 metadata:
-  name: roamie-trip-planner-agent
+  name: roamie-weather-agent
   namespace: roamie
   tenantId: roamie
   tag: 1.1.0
@@ -12,15 +12,15 @@ metadata:
     agent.tesserix.app/gateway-export: 'false'
   annotations:
     roamie.tesserix.app/release-state: candidate
-    roamie.tesserix.app/definition-revision: fce2ca59939f
+    roamie.tesserix.app/definition-revision: 9ed172c7cd04
 spec:
-  title: Roamie Trip Planner
-  description: Select places for a feasible trip respecting dates, budget and preferences.
+  title: Roamie Weather
+  description: Review all dated weather evidence and its coverage summary.
   model:
     provider: solo-agentgateway
     name: roamie-auto
   a2a:
-    url: http://agentgateway-mcp.agentgateway-system.svc.cluster.local:8082/a2a/v1/roamie-trip-planner
+    url: http://agentgateway-mcp.agentgateway-system.svc.cluster.local:8082/a2a/v1/roamie-weather
     capabilities:
       streaming: false
       pushNotifications: false
@@ -35,10 +35,10 @@ spec:
     protocol: http
     image: ghcr.io/tesserix/ai-agents-roamie@sha256:eba4d1257cc1239063ee9ebf1b0e58caf4dfad3e7e5cd2eece30066e6cf0cb96
     port: 8080
-    path: /a2a/v1/roamie-trip-planner
+    path: /a2a/v1/roamie-weather
     healthPath: /healthz
   skills:
-  - ref: roamie-trip-planner
+  - ref: roamie-weather
     version: 1.1.0
   tools:
   - ref: roamie-travel-search

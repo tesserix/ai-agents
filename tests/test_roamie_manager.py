@@ -540,3 +540,117 @@ async def test_manager_independently_validates_three_plans_before_final_review(c
             result = await run()
             assert len(result.response.trip_options) == 3
             assert len(set(result.review_run_ids)) == 2
+
+
+@pytest.mark.parametrize("planning", [False, True])
+async def test_trip_consults_weather_and_entry_before_itinerary_review(planning):
+    from roamie_agents.contracts import Evidence, project
+
+    now = datetime.now(UTC)
+    kinds = (Specialist.WEATHER, Specialist.ENTRY, Specialist.TRIP)
+    facts = [
+        Evidence(
+            id=kind.value,
+            name=kind.value,
+            category=kind,
+            source_url="https://example.org/source",
+            observed_at=now,
+        )
+        for kind in kinds
+    ]
+    if planning:
+        from test_roamie_planning import evidence
+
+        facts[-1] = evidence().model_copy(update={"category": Specialist.TRIP, "observed_at": now})
+    called = []
+
+    def reply(request):
+        body = json.loads(request.content)
+        incoming = DelegatedRequest.model_validate_json(
+            body["params"]["message"]["parts"][0]["text"]
+        )
+        kind = incoming.context.specialist
+        called.append(kind)
+        assert kind == Specialist.TRIP or not incoming.payload.request.plan_options
+        output = TravelResponse(
+            status="ok",
+            specialist=kind,
+            recommendations=[project(fact, None) for fact in facts if fact.category == kind],
+        )
+        if planning and kind == Specialist.TRIP:
+            from roamie_agents.planning import PlanSelection
+            from test_roamie_planning import proposal
+
+            output = output.model_copy(
+                update={"trip_options": PlanSelection.model_validate(proposal()).options}
+            )
+        return httpx.Response(
+            200,
+            json={
+                "jsonrpc": "2.0",
+                "id": body["id"],
+                "result": {
+                    "status": {"state": "completed"},
+                    "artifacts": [
+                        {"parts": [{"kind": "text", "text": signed_reply(request, output)}]}
+                    ],
+                },
+            },
+        )
+
+    approved = ModelResponse(
+        content=json.dumps(
+            {"decision": "approve", "confidence": 1.0, "summary": "Checked", "issues": []}
+        )
+    )
+    model = ScriptedProvider(
+        *[approved for _ in range(6)],
+        capabilities=ModelCapabilities(structured_output=True, context_window_tokens=32768),
+    )
+    async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as http:
+        manager = PersonalTripManager(
+            workers={
+                kind: WorkerEndpoint(
+                    name=f"roamie-{kind.value}",
+                    url=f"https://gateway.example.org/a2a/v1/roamie-{kind.value}",
+                )
+                for kind in kinds
+            },
+            client=A2AWorkerClient(api_key=SecretStr("fixture"), timeout=5, client=http),
+            supervisor=SupervisorService(provider=model, definition=manager_definition()),
+            identity_key=SecretStr("a" * 32),
+            delegation_key=SecretStr("d" * 32),
+        )
+        result = await manager.manage(
+            profile=Profile(
+                subject="user",
+                trip_id="trip",
+                revision="1",
+                start_date="2026-10-01" if planning else None,
+                end_date="2026-10-01" if planning else None,
+            ),
+            current_revision=lambda: "1",
+            specialist=Specialist.TRIP,
+            request=RecommendationRequest(prompt="Plan", plan_options=planning),
+            facts=facts,
+        )
+    assert called == list(kinds)
+    assert [item.specialist for item in result.advisories] == list(kinds[:2])
+    assert "planning_checks" in "".join(
+        part.text for part in model.requests[-1].messages[-1].content
+    )
+
+
+def test_multi_destination_dates_stay_within_confirmed_trip():
+    from roamie_agents.manager import planning_dates
+
+    profile = Profile(
+        subject="user", trip_id="trip", revision="1", start_date="2026-10-01", end_date="2026-10-15"
+    )
+    request = RecommendationRequest(prompt="Tokyo", start_date="2026-10-04", end_date="2026-10-07")
+    assert str(planning_dates(profile, request)["start_date"]) == "2026-10-04"
+    with pytest.raises(TravelFailure, match="dates_outside_trip"):
+        planning_dates(
+            profile,
+            RecommendationRequest(prompt="Tokyo", start_date="2026-10-04", end_date="2026-10-20"),
+        )

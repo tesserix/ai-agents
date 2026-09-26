@@ -131,3 +131,16 @@ def test_plan_survives_signed_wire_roundtrip_without_trusting_a_total():
 
     plan = PlanSelection.model_validate(proposal())
     assert PlanSelection.model_validate_json(plan.model_dump_json()) == plan
+
+
+@pytest.mark.parametrize("kind", [Specialist.WEATHER, Specialist.ENTRY])
+async def test_planning_checks_cannot_be_scheduled_as_places(kind):
+    import json
+
+    service = TravelService(
+        provider=ScriptedProvider(ModelResponse(content=json.dumps(proposal()))), clock=lambda: NOW
+    )
+    with pytest.raises(TravelFailure):
+        await service.recommend(
+            Specialist.TRIP, request(), facts=[evidence().model_copy(update={"category": kind})]
+        )

@@ -105,7 +105,8 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
         + manifest["spec"]["description"]
         + "\n---\n\n"
         + skill["spec"]["instructions"]
-        + "\n\nUse only verified MCP evidence. Return through the personal trip manager.\n"
+        + "\n\nUse only manager-supplied evidence; preserve its verification status and source. "
+        "Return through the personal trip manager.\n"
     )
 
 
