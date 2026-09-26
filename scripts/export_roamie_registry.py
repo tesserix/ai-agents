@@ -12,7 +12,7 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
         "apiVersion": "registry.agentic.dev/v1alpha1",
         "kind": "Agent",
         "metadata": {
-            "name": agent.name,
+            "name": f"{agent.name}-agent",
             "namespace": "roamie",
             "tenantId": "roamie",
             "tag": agent.version,
@@ -60,7 +60,7 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
     skill = {
         "apiVersion": manifest["apiVersion"],
         "kind": "Skill",
-        "metadata": dict(manifest["metadata"]),
+        "metadata": {**manifest["metadata"], "name": agent.name},
         "spec": {
             "displayName": manifest["spec"]["title"],
             "description": manifest["spec"]["description"],

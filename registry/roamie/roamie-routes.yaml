@@ -1,7 +1,7 @@
 apiVersion: registry.agentic.dev/v1alpha1
 kind: Agent
 metadata:
-  name: roamie-routes
+  name: roamie-routes-agent
   namespace: roamie
   tenantId: roamie
   tag: 1.0.0
