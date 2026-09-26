@@ -1,0 +1,38 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: roamie-model-access
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: roamie-model
+  traffic:
+    jwtAuthentication:
+      mode: Strict
+      providers:
+      - issuer: https://auth.tesserix.app
+        audiences:
+        - '387190457387450503'
+        jwks:
+          remote:
+            backendRef:
+              group: agentgateway.dev
+              kind: AgentgatewayBackend
+              name: ai-zitadel-jwks
+              port: 443
+            jwksPath: /oauth/v2/keys
+            cacheDuration: 15m
+    authorization:
+      action: Allow
+      policy:
+        matchExpressions:
+        - '"roamie.models" in jwt["urn:zitadel:iam:org:project:387190457387450503:roles"]'
+    timeouts:
+      request: 55s
+    rateLimit:
+      local:
+      - requests: 120
+        burst: 16
+        unit: Minutes

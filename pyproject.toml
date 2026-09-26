@@ -37,6 +37,7 @@ packages = [
   "src/kora_agents",
   "src/sre_agent",
   "src/orchestrator_agent",
+  "src/roamie_agents",
 ]
 
 
@@ -58,17 +59,19 @@ select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "RUF"]
 [tool.mypy]
 python_version = "3.14"
 strict = true
-packages = ["agent_telemetry", "document_agent", "kora_agents", "sre_agent", "orchestrator_agent"]
+packages = ["agent_telemetry", "document_agent", "kora_agents", "sre_agent", "orchestrator_agent", "roamie_agents"]
 plugins = ["pydantic.mypy"]
 
 [tool.coverage.run]
-source = ["agent_telemetry", "document_agent", "kora_agents", "sre_agent", "orchestrator_agent"]
+source = ["agent_telemetry", "document_agent", "kora_agents", "sre_agent", "orchestrator_agent", "roamie_agents"]
 branch = true
 omit = [
   "src/kora_agents/main.py",
   "src/sre_agent/main.py",
   "src/orchestrator_agent/main.py",
   "src/orchestrator_agent/worker.py",
+  "src/roamie_agents/main.py",
+  "src/roamie_agents/manager_main.py",
 ]
 
 [tool.coverage.report]

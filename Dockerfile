@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.18
-ARG BASE_IMAGE=ghcr.io/tesserix/base-python-adk-3.14:20260904@sha256:4e38ff684b5c9936b855cac13aa71db619de23bca6d379d01e6156c4f402a56b
+ARG BASE_IMAGE=ghcr.io/tesserix/base-python-adk-3.14:20260912@sha256:4cbbea807dc3af7664824e7e270a9618eaa49cb16806c83d58236ce3c2aba523
 ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.12.5@sha256:e85be844203885286c60ffad8a858d48afb6c5a5c237ca0e67f12e74b8f174b1
 
 FROM ${UV_IMAGE} AS uv
@@ -42,6 +42,13 @@ ENTRYPOINT ["uvicorn", "sre_agent.main:app", "--host", "0.0.0.0", "--port", "808
 FROM runtime-base AS orchestrator-runtime
 
 ENTRYPOINT ["uvicorn", "orchestrator_agent.main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
+
+
+FROM runtime-base AS roamie-runtime
+ENTRYPOINT ["uvicorn", "roamie_agents.main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
+
+FROM runtime-base AS roamie-manager-runtime
+ENTRYPOINT ["uvicorn", "roamie_agents.manager_main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
 
 # Preserve the repository's original default for local `docker build` callers.
 FROM kora-runtime AS runtime

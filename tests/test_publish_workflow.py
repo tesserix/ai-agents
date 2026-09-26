@@ -5,8 +5,8 @@ import yaml
 
 PUBLISH_WORKFLOW = Path(__file__).parents[1] / ".github" / "workflows" / "publish.yml"
 ADK_BASE = (
-    "ghcr.io/tesserix/base-python-adk-3.14:20260904"
-    "@sha256:4e38ff684b5c9936b855cac13aa71db619de23bca6d379d01e6156c4f402a56b"
+    "ghcr.io/tesserix/base-python-adk-3.14:20260912"
+    "@sha256:4cbbea807dc3af7664824e7e270a9618eaa49cb16806c83d58236ce3c2aba523"
 )
 
 
@@ -132,6 +132,8 @@ def test_kora_and_sre_publish_as_distinct_runtime_images() -> None:
     job = yaml.safe_load(PUBLISH_WORKFLOW.read_text())["jobs"]["image"]
 
     assert job["strategy"]["matrix"]["include"] == [
+        {"target": "roamie-manager-runtime", "image": "ghcr.io/tesserix/ai-agents-roamie-manager"},
+        {"target": "roamie-runtime", "image": "ghcr.io/tesserix/ai-agents-roamie"},
         {"target": "kora-runtime", "image": "ghcr.io/tesserix/ai-agents"},
         {"target": "sre-runtime", "image": "ghcr.io/tesserix/ai-agents-sre"},
         {"target": "orchestrator-runtime", "image": "ghcr.io/tesserix/ai-agents-orchestrator"},
@@ -159,3 +161,10 @@ def test_sre_publication_uses_a_separate_tenant_scoped_deploy_key() -> None:
         ' deploy_key="${REGISTRY_SRE_DEPLOY_KEY}"' in script
     )
     assert "X-Agentic-Registry-Deploy-Key: ${deploy_key}" in script
+
+
+def test_roamie_publication_has_a_separate_tenant_key_and_manual_gate():
+    workflow = PUBLISH_WORKFLOW.read_text()
+    assert "AGENTIC_REGISTRY_ROAMIE_DEPLOY_KEY" in workflow
+    assert "registry/roamie/skills/*.yaml" in workflow
+    assert "inputs.publish_roamie" in workflow

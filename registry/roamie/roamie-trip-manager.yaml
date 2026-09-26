@@ -1,0 +1,30 @@
+apiVersion: registry.agentic.dev/v1alpha1
+kind: Agent
+metadata:
+  name: roamie-trip-manager
+  namespace: roamie
+  tenantId: roamie
+  tag: 1.0.0
+  visibility: internal
+  labels:
+    app.kubernetes.io/part-of: roamie
+    ai.tesserix.dev/runtime: tesserix-adk
+    agent.tesserix.app/gateway-export: 'false'
+  annotations:
+    roamie.tesserix.app/release-state: candidate
+    roamie.tesserix.app/definition-revision: 7dc6ac81d1b3
+    roamie.tesserix.app/signed-http-path: /v1/trip-manager
+spec:
+  title: Roamie Trip Manager
+  description: Supervise the answer another AI agent produced for a task.
+  model:
+    provider: solo-agentgateway
+    name: roamie-auto
+  skills:
+  - id: roamie-trip-manager
+    name: roamie-trip-manager
+    description: Profile-constrained travel assistance with sourced evidence.
+    tags:
+    - roamie
+    - travel
+    - profile-reviewed
