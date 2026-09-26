@@ -15,7 +15,7 @@ def proposal():
         "options": [
             {
                 "tier": tier,
-                "title": title,
+                "label": title,
                 "summary": "A proposed day around the museum",
                 "accommodation_guidance": (
                     "Compare central accommodation; rates and availability need confirmation"
@@ -69,6 +69,7 @@ def evidence():
         category="activities",
         source_url="https://maps.google.com/place",
         observed_at=NOW,
+        destination="Hanoi",
     )
 
 
@@ -87,7 +88,16 @@ async def test_three_budget_plans_preserve_grounding_and_budget_totals():
 
 
 @pytest.mark.parametrize(
-    "change", ["unknown_place", "over_budget", "wrong_date", "overlap", "duplicate_tier"]
+    "change",
+    [
+        "unknown_place",
+        "over_budget",
+        "wrong_date",
+        "overlap",
+        "duplicate_tier",
+        "wrong_city",
+        "unsupported_accommodation",
+    ],
 )
 async def test_invalid_plan_cannot_reach_the_manager(change):
     import json
@@ -103,6 +113,10 @@ async def test_invalid_plan_cannot_reach_the_manager(change):
         value["options"][0]["days"][0]["stops"].append(
             {"evidence_id": "museum", "time": "10:30", "minutes": 30, "note": "visit"}
         )
+    if change == "wrong_city":
+        value["options"][0]["days"][0]["destination"] = "Ho Chi Minh City"
+    if change == "unsupported_accommodation":
+        value["options"][0]["accommodation_ids"] = ["museum"]
     if change == "duplicate_tier":
         value["options"][2]["tier"] = "budget"
     service = TravelService(

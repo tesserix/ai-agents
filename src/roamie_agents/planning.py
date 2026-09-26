@@ -46,7 +46,7 @@ class PlanningDay(Contract):
 
 class TripOption(Contract):
     tier: Literal["budget", "balanced", "premium"]
-    title: str = Field(min_length=1, max_length=100)
+    label: str = Field(min_length=1, max_length=100)
     summary: str = Field(min_length=1, max_length=500)
     accommodation_ids: Annotated[tuple[str, ...], Field(max_length=3)] = ()
     accommodation_guidance: str = Field(min_length=1, max_length=500)
