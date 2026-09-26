@@ -112,3 +112,52 @@ def test_missing_workload_identity_fails_at_startup():
             Settings(api_key="a" * 32, delegation_key="d" * 32, mcp_schema_digest="1" * 64),
             "roamie-food",
         )
+
+
+@pytest.mark.parametrize("reason", ["invalid_planning_stop", "secret provider payload"])
+def test_worker_failure_logs_only_safe_reason_with_response_correlation(reason):
+    from fastapi.testclient import TestClient
+    from structlog.testing import capture_logs
+
+    from roamie_agents.api import create_app
+    from roamie_agents.config import Settings
+    from roamie_agents.runtime import TravelFailure
+
+    class FailedService:
+        async def recommend(self, *args, **kwargs):
+            raise TravelFailure(reason)
+
+    signed = Delegations(key=SecretStr("d" * 32)).request(
+        manager_id="trip-manager-" + "a" * 64,
+        revision="private-revision",
+        specialist=Specialist.FOOD,
+        payload=WorkerPayload(request=RecommendationRequest(prompt="private prompt"), facts=[]),
+    )
+    app = create_app(
+        settings=Settings(api_key="a" * 32, delegation_key="d" * 32, mcp_schema_digest="1" * 64),
+        service=FailedService(),
+    )
+    with TestClient(app) as client, capture_logs() as logs:
+        response = client.post(
+            "/a2a/v1/roamie-food",
+            headers={"Authorization": "Bearer " + "a" * 32},
+            json={
+                "jsonrpc": "2.0",
+                "id": "private-client-id",
+                "method": "message/send",
+                "params": {
+                    "message": {
+                        "role": "user",
+                        "parts": [{"kind": "text", "text": signed.model_dump_json()}],
+                    }
+                },
+            },
+        )
+    assert response.status_code == 502
+    event = next(item for item in logs if item["event"] == "roamie_request_failed")
+    assert event["request_id"] == response.json()["request_id"]
+    assert event["component"] == "worker"
+    assert event["reason"] == (reason if reason == "invalid_planning_stop" else "unclassified")
+    assert "private" not in json.dumps(logs)
+    assert "secret" not in json.dumps(logs)
+    assert reason not in response.text

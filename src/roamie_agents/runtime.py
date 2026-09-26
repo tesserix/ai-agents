@@ -2,6 +2,7 @@ import json
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 
+import structlog
 from tesserix_adk.core import ModelProvider
 from tesserix_adk.guardrails import InjectionGuard
 from tesserix_adk.runtime import AgentRunner
@@ -20,7 +21,10 @@ from roamie_agents.planning import PlanSelection, validate_options
 
 
 class TravelFailure(Exception):
-    pass
+    def __init__(self, reason: str, *, run_id: str | None = None, state: str | None = None) -> None:
+        super().__init__(reason)
+        self.run_id = run_id
+        self.state = state
 
 
 class TravelService:
@@ -106,6 +110,9 @@ class TravelService:
                 selection_run.state.value,
                 selection_run.id,
             )
+        structlog.get_logger(__name__).info(
+            "roamie_model_finished", specialist=specialist.value, run_id=run_id, state=state
+        )
         if planning and state == "completed" and isinstance(output, PlanSelection):
             try:
                 validate_options(
@@ -125,7 +132,7 @@ class TravelService:
                     evidence_destinations={fact.id: fact.destination for fact in eligible},
                 )
             except ValueError as error:
-                raise TravelFailure(str(error)) from error
+                raise TravelFailure(str(error), run_id=run_id, state=state) from error
             selected_ids = {
                 stop.evidence_id
                 for option in output.options
@@ -141,7 +148,7 @@ class TravelService:
                 for option in output.options
                 for key in option.accommodation_ids
             ):
-                raise TravelFailure("unsupported_accommodation")
+                raise TravelFailure("unsupported_accommodation", run_id=run_id, state=state)
             return TravelResponse(
                 status="ok",
                 specialist=specialist,
@@ -156,22 +163,22 @@ class TravelService:
                 ),
             )
         if state != "completed" or not isinstance(output, Selection):
-            raise TravelFailure("model_failed")
+            raise TravelFailure("model_failed", run_id=run_id, state=state)
         ids = output.selected_ids
         by_id = {fact.id: fact for fact in eligible}
         if len(ids) != len(set(ids)) or any(key not in by_id for key in ids):
-            raise TravelFailure("unsupported_citation")
+            raise TravelFailure("unsupported_citation", run_id=run_id, state=state)
         if specialist in (Specialist.WEATHER, Specialist.ENTRY):
             ids = list(by_id)
         if specialist == Specialist.TRIP and any(
             by_id[key].category in (Specialist.WEATHER, Specialist.ENTRY) for key in ids
         ):
-            raise TravelFailure("planning_check_is_not_a_place")
+            raise TravelFailure("planning_check_is_not_a_place", run_id=run_id, state=state)
         selected = [by_id[key] for key in ids]
         if request.budget_minor is not None and specialist == Specialist.TRIP:
             known_total = sum(fact.cost_minor or 0 for fact in selected)
             if known_total > request.budget_minor:
-                raise TravelFailure("budget_exceeded")
+                raise TravelFailure("budget_exceeded", run_id=run_id, state=state)
         return TravelResponse(
             status="ok" if selected else "no_matches",
             specialist=specialist,

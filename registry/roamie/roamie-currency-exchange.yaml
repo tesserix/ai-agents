@@ -4,7 +4,7 @@ metadata:
   name: roamie-currency-exchange-agent
   namespace: roamie
   tenantId: roamie
-  tag: 1.1.3
+  tag: 1.1.4
   visibility: public
   labels:
     app.kubernetes.io/part-of: roamie
@@ -40,7 +40,7 @@ spec:
     healthPath: /healthz
   skills:
   - ref: roamie-currency-exchange
-    version: 1.1.3
+    version: 1.1.4
   tools:
   - ref: roamie-travel-search
     version: 1.1.0

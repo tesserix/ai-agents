@@ -18,6 +18,7 @@ from roamie_agents.contracts import (
 )
 from roamie_agents.definitions import DEFINITIONS
 from roamie_agents.delegation import DelegationError, Delegations
+from roamie_agents.diagnostics import record_failure
 from roamie_agents.evidence import EvidenceBatch
 from roamie_agents.runtime import TravelFailure, TravelService
 
@@ -79,13 +80,14 @@ def create_app(
 
     @app.exception_handler(TravelFailure)
     async def failure(request: Request, error: TravelFailure) -> JSONResponse:
-        del request, error
+        del request
+        request_id = record_failure("worker", error)
         return JSONResponse(
             status_code=502,
             content={
                 "code": "travel_unavailable",
                 "message": "Travel suggestions are unavailable.",
-                "request_id": secrets.token_hex(16),
+                "request_id": request_id,
             },
         )
 

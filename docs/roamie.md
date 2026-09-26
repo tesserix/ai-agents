@@ -157,3 +157,7 @@ Three itineraries plus their provider evidence exceeded the generic supervisor's
 manager permits 32,000 input tokens per review run, with the existing two-call,
 output, model-context and time limits retained. The complete manager request stays
 within its 78-second deadline; token limits are not removed.
+
+### Failure diagnostics
+
+Manager and worker failures emit `roamie_request_failed` with a server-generated request ID and an allowlisted reason. Worker responses include the same request ID. Planner runs emit `roamie_model_finished`; post-generation validation failures retain the ADK run ID and state for correlation. Unknown exception text, prompts, profile contents and credentials are excluded. These diagnostics do not bypass failed reviews or retry rejected plans. Customer activation remains gated on authenticated app and representative reliability checks (issue #65).
