@@ -24,3 +24,12 @@ def test_roamie_catalog_names_are_unique_across_kinds():
     keys = [(d["metadata"]["namespace"], d["metadata"]["name"]) for d in documents]
     assert len(keys) == 16
     assert len(set(keys)) == len(keys)
+
+
+def test_roamie_definitions_are_discoverable_without_enabling_routes():
+    for pattern in ("*.yaml", "skills/*.yaml"):
+        for path in Path("registry/roamie").glob(pattern):
+            document = yaml.safe_load(path.read_text())
+            assert document["metadata"]["visibility"] == "public"
+            assert document["metadata"]["tag"] == "1.0.1"
+            assert document["metadata"]["labels"]["agent.tesserix.app/gateway-export"] == "false"

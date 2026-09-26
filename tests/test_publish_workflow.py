@@ -163,7 +163,7 @@ def test_sre_publication_uses_a_separate_tenant_scoped_deploy_key() -> None:
     assert "X-Agentic-Registry-Deploy-Key: ${deploy_key}" in script
 
 
-def test_roamie_publication_has_a_separate_tenant_key_and_manual_gate():
+def test_roamie_publication_has_a_separate_tenant_key():
     workflow = PUBLISH_WORKFLOW.read_text()
     assert "AGENTIC_REGISTRY_ROAMIE_DEPLOY_KEY" in workflow
     assert "registry/roamie/skills/*.yaml" in workflow
@@ -175,7 +175,7 @@ def test_roamie_mcp_publication_uses_a_pinned_release_and_scoped_identity() -> N
     checkout = next(
         step for step in job["steps"] if step.get("name") == "Read released Roamie MCP manifest"
     )
-    assert checkout["if"] == "inputs.publish_roamie"
+    assert checkout["if"] == "github.event_name == 'push' || inputs.publish_roamie"
     assert checkout["with"]["repository"] == "tesserix/roamie"
     assert checkout["with"]["ref"] == "0f4651ddc1d39c76cedc26512168b7b8709124d7"
     assert checkout["with"]["persist-credentials"] is False
@@ -186,4 +186,17 @@ def test_roamie_mcp_publication_uses_a_pinned_release_and_scoped_identity() -> N
     assert (
         'registry/roamie/*|.roamie-release/*) deploy_key="${REGISTRY_ROAMIE_DEPLOY_KEY}"'
         in publish["run"]
+    )
+
+
+def test_roamie_publication_runs_on_main_push_after_verification() -> None:
+    job = yaml.safe_load(PUBLISH_WORKFLOW.read_text())["jobs"]["registry"]
+    assert set(job["needs"]) == {"verify", "image"}
+    assert "github.ref == 'refs/heads/main'" in job["if"]
+    publish = next(
+        step for step in job["steps"] if step.get("name") == "Publish reviewed Agent manifests"
+    )
+    assert (
+        publish["env"]["PUBLISH_ROAMIE"]
+        == "${{ github.event_name == 'push' || inputs.publish_roamie }}"
     )

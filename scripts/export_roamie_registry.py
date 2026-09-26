@@ -15,8 +15,8 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
             "name": f"{agent.name}-agent",
             "namespace": "roamie",
             "tenantId": "roamie",
-            "tag": agent.version,
-            "visibility": "internal",
+            "tag": "1.0.1",
+            "visibility": "public",
             "labels": {
                 "app.kubernetes.io/part-of": "roamie",
                 "ai.tesserix.dev/runtime": "tesserix-adk",
