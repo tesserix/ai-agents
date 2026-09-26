@@ -151,3 +151,40 @@ async def test_weather_with_trip_dates_and_accessibility_retains_coverage():
     )
     assert response.status == "ok"
     assert response.recommendations[0].weather.coverage == "unavailable"
+
+
+async def test_planning_checks_keep_each_stays_dates_country_and_location():
+    from roamie_agents.connections import PlanningSources
+
+    req = RecommendationRequest(
+        prompt="Plan",
+        start_date="2026-11-01",
+        end_date="2026-11-05",
+        stays=[
+            {
+                "destination": "Melbourne",
+                "days": 2,
+                "country": "AU",
+                "origin": {"latitude": -37.8, "longitude": 145},
+            },
+            {
+                "destination": "Tokyo",
+                "days": 3,
+                "country": "JP",
+                "origin": {"latitude": 35.7, "longitude": 139.7},
+            },
+        ],
+    )
+    async with httpx.AsyncClient() as client:
+        source = PlanningSources(None, GoogleWeatherSource(client, None, clock=lambda: NOW))
+        weather = await source.search(Specialist.WEATHER, req)
+        entry = await source.search(Specialist.ENTRY, req)
+    assert len({fact.id for fact in weather.facts}) == 2
+    assert [fact.destination for fact in weather.facts] == ["Melbourne", "Tokyo"]
+    assert weather.facts[0].weather.missing_dates == ("2026-11-01", "2026-11-02")
+    assert weather.facts[1].weather.missing_dates == ("2026-11-03", "2026-11-04", "2026-11-05")
+    assert [fact.location.latitude for fact in weather.facts] == [-37.8, 35.7]
+    assert [fact.destination for fact in entry.facts] == ["Melbourne", "Tokyo"]
+    assert len({fact.id for fact in entry.facts}) == 2
+    assert "homeaffairs" in str(entry.facts[0].source_url)
+    assert "mofa.go.jp" in str(entry.facts[1].source_url)

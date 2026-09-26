@@ -3,7 +3,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from roamie_agents.base import Contract
+from roamie_agents.base import Contract, Location
 
 
 class PlanningBudget(Contract):
@@ -34,6 +34,8 @@ class PlanningStop(Contract):
 
 
 class PlanningStay(Contract):
+    country: str | None = Field(default=None, pattern=r"^[A-Z]{2}$")
+    origin: Location | None = None
     destination: str = Field(min_length=1, max_length=200)
     days: int = Field(ge=1, le=14, strict=True)
 
