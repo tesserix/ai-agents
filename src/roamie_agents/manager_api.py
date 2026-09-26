@@ -2,7 +2,7 @@ import asyncio
 import hashlib
 import hmac
 import time
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Annotated
 
@@ -33,12 +33,25 @@ def create_manager_app(
     sources: SourceFactory,
     api_key: SecretStr,
     profile_signing_key: SecretStr,
+    profile_authority: Callable[[Profile], Awaitable[str]],
     clock: Callable[[], float] = time.time,
     max_in_flight: int = 16,
+    on_close: Callable[[], Awaitable[None]] | None = None,
 ) -> FastAPI:
     if min(len(api_key.get_secret_value()), len(profile_signing_key.get_secret_value())) < 32:
         raise ValueError("manager credentials require at least 32 characters")
-    app = FastAPI(title="Roamie personal trip manager", docs_url=None, redoc_url=None)
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            if on_close is not None:
+                await on_close()
+
+    app = FastAPI(
+        title="Roamie personal trip manager", docs_url=None, redoc_url=None, lifespan=lifespan
+    )
 
     slots = asyncio.Semaphore(max_in_flight)
 
@@ -98,13 +111,15 @@ def create_manager_app(
         if not snapshot.issued_at <= now < snapshot.expires_at <= snapshot.issued_at + 120:
             raise HTTPException(401, "expired profile snapshot")
         try:
+            if await profile_authority(snapshot.profile) != snapshot.profile.revision:
+                raise TravelFailure("profile_changed")
             async with asynccontextmanager(sources)(gateway_token) as source:
                 batch = await source.search(snapshot.specialist, snapshot.request)
             if batch.status != "ok":
                 raise HTTPException(503, "provider evidence unavailable")
             result = await manager.manage(
                 profile=snapshot.profile,
-                current_revision=lambda: snapshot.profile.revision,
+                current_revision=lambda: profile_authority(snapshot.profile),
                 specialist=snapshot.specialist,
                 request=snapshot.request,
                 facts=batch.facts,

@@ -9,6 +9,7 @@ from tesserix_adk.models.providers import OpenAICompatibleProvider
 from roamie_agents.api import Source
 from roamie_agents.config import Settings
 from roamie_agents.evidence import MCPSource
+from roamie_agents.oauth import GatewayTransport, WorkloadTokens
 
 
 class GatewaySecrets:
@@ -16,16 +17,17 @@ class GatewaySecrets:
         self._settings = settings
 
     def secret(self, name: str) -> str | None:
-        return (
-            self._settings.gateway_api_key.get_secret_value()
-            if name == "ROAMIE_MODEL_KEY"
-            else None
-        )
+        return "workload-credential-injected-by-transport" if name == "ROAMIE_MODEL_KEY" else None
 
 
 def gateway_provider(
-    settings: Settings, *, transport: httpx.AsyncBaseTransport | None = None
+    settings: Settings,
+    *,
+    agent: str = "roamie-trip-manager",
+    tokens: WorkloadTokens | None = None,
+    transport: httpx.AsyncBaseTransport | None = None,
 ) -> OpenAICompatibleProvider:
+    tokens = tokens or workload_tokens(settings, agent)
     return OpenAICompatibleProvider(
         settings.gateway_model,
         base_url=settings.gateway_base_url.removesuffix("/v1"),
@@ -37,7 +39,7 @@ def gateway_provider(
         api_key_variable="ROAMIE_MODEL_KEY",
         secrets=GatewaySecrets(settings),
         timeout=40,
-        transport=transport,
+        transport=GatewayTransport(tokens, origin=settings.gateway_base_url, transport=transport),
     )
 
 
@@ -73,3 +75,9 @@ async def source_session(
             )
         finally:
             await session.close()
+
+
+def workload_tokens(settings: Settings, agent: str) -> WorkloadTokens:
+    if agent not in settings.gateway_clients:
+        raise ValueError(f"missing workload identity for {agent}")
+    return WorkloadTokens(agent=agent, client=settings.gateway_clients[agent])

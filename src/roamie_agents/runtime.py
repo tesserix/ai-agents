@@ -1,5 +1,5 @@
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 
 from tesserix_adk.core import ModelProvider
@@ -24,7 +24,10 @@ class TravelFailure(Exception):
 
 class TravelService:
     def __init__(
-        self, *, provider: ModelProvider, clock: Callable[[], datetime] = lambda: datetime.now(UTC)
+        self,
+        *,
+        provider: ModelProvider | Mapping[Specialist, ModelProvider],
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self._provider = provider
         self._clock = clock
@@ -75,7 +78,9 @@ class TravelService:
             )
         definition = DEFINITIONS[specialist]
         runner = AgentRunner(
-            provider=self._provider,
+            provider=self._provider[specialist]
+            if isinstance(self._provider, Mapping)
+            else self._provider,
             guardrails={
                 "injection": InjectionGuard(instructions=definition.agent.instructions),
             },

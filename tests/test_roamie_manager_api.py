@@ -14,6 +14,10 @@ from roamie_agents.manager import PersonalTripManager
 from roamie_agents.manager_api import create_manager_app
 
 
+async def authority(profile):
+    return profile.revision
+
+
 def snapshot(**changes):
     return json.dumps(
         {
@@ -54,12 +58,14 @@ async def test_signed_profile_boundary_fails_closed(raw, authorization, delegate
             workers={},
             client=A2AWorkerClient(api_key=SecretStr("a" * 32), timeout=5, client=worker_http),
             supervisor=SupervisorService(provider=ScriptedProvider()),
+            delegation_key=SecretStr("d" * 32),
             identity_key=SecretStr("c" * 32),
         )
         app = create_manager_app(
             manager=manager,
             sources=sources,
             api_key=SecretStr("a" * 32),
+            profile_authority=authority,
             profile_signing_key=SecretStr("b" * 32),
             clock=lambda: 1000,
         )
@@ -91,12 +97,14 @@ async def test_provider_failure_returns_unavailable_without_exposing_error():
             workers={},
             client=A2AWorkerClient(api_key=SecretStr("a" * 32), timeout=5, client=worker_http),
             supervisor=SupervisorService(provider=ScriptedProvider()),
+            delegation_key=SecretStr("d" * 32),
             identity_key=SecretStr("c" * 32),
         )
         app = create_manager_app(
             manager=manager,
             sources=sources,
             api_key=SecretStr("a" * 32),
+            profile_authority=authority,
             profile_signing_key=SecretStr("b" * 32),
             clock=lambda: 1000,
         )

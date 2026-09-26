@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import json
 from datetime import UTC, datetime
 
@@ -12,8 +14,26 @@ from orchestrator_agent.config import WorkerEndpoint
 from orchestrator_agent.supervision import SupervisorService
 from orchestrator_agent.workers import A2AWorkerClient
 from roamie_agents.contracts import RecommendationRequest, Specialist, TravelResponse
+from roamie_agents.delegation import DelegatedRequest, DelegatedResponse, canonical
 from roamie_agents.manager import PersonalTripManager, Profile
 from roamie_agents.runtime import TravelFailure
+
+
+def signed_reply(request, output):
+    incoming = json.loads(request.content)
+    delegation = DelegatedRequest.model_validate_json(
+        incoming["params"]["message"]["parts"][0]["text"]
+    )
+    response = DelegatedResponse(
+        context=delegation.context,
+        request_digest=hashlib.sha256(canonical(delegation)).hexdigest(),
+        response=TravelResponse.model_validate(output),
+        signature="0" * 64,
+    )
+    signature = hmac.new(
+        b"d" * 32, b"response\x00" + canonical(response), hashlib.sha256
+    ).hexdigest()
+    return response.model_copy(update={"signature": signature}).model_dump_json()
 
 
 def reviewer(decision="approve"):
@@ -47,7 +67,9 @@ async def test_manager_checks_request_and_response_and_scopes_identity():
                 "id": calls[-1]["id"],
                 "result": {
                     "status": {"state": "completed"},
-                    "artifacts": [{"parts": [{"kind": "text", "text": output.model_dump_json()}]}],
+                    "artifacts": [
+                        {"parts": [{"kind": "text", "text": signed_reply(request, output)}]}
+                    ],
                 },
             },
         )
@@ -62,6 +84,7 @@ async def test_manager_checks_request_and_response_and_scopes_identity():
             },
             client=worker,
             supervisor=reviewer(),
+            delegation_key=SecretStr("d" * 32),
             identity_key=SecretStr("a" * 32),
         )
         profile = Profile(subject="user-1", trip_id="trip-1", revision="1", allergies=("peanut",))
@@ -93,6 +116,7 @@ async def test_rejected_preflight_never_calls_worker():
             },
             client=A2AWorkerClient(api_key=SecretStr("fixture"), timeout=5, client=client),
             supervisor=reviewer("reject"),
+            delegation_key=SecretStr("d" * 32),
             identity_key=SecretStr("a" * 32),
         )
         with pytest.raises(TravelFailure, match="request_requires_clarification"):
@@ -115,6 +139,7 @@ async def test_changed_profile_never_calls_worker():
             },
             client=A2AWorkerClient(api_key=SecretStr("fixture"), timeout=5, client=client),
             supervisor=reviewer(),
+            delegation_key=SecretStr("d" * 32),
             identity_key=SecretStr("a" * 32),
         )
         with pytest.raises(TravelFailure, match="profile_changed"):
@@ -130,7 +155,7 @@ async def test_changed_profile_never_calls_worker():
 @pytest.mark.parametrize(
     "output,expected",
     [
-        ({"status": "no_matches", "specialist": "shopping"}, "wrong_specialist"),
+        ({"status": "no_matches", "specialist": "shopping"}, "manager_review_unavailable"),
         (
             {
                 "status": "ok",
@@ -156,7 +181,9 @@ async def test_manager_blocks_worker_claims_missing_from_independent_evidence(ou
             json={
                 "result": {
                     "status": {"state": "completed"},
-                    "artifacts": [{"parts": [{"kind": "text", "text": json.dumps(output)}]}],
+                    "artifacts": [
+                        {"parts": [{"kind": "text", "text": signed_reply(request, output)}]}
+                    ],
                 }
             },
         )
@@ -170,6 +197,7 @@ async def test_manager_blocks_worker_claims_missing_from_independent_evidence(ou
             },
             client=A2AWorkerClient(api_key=SecretStr("fixture"), timeout=5, client=client),
             supervisor=reviewer(),
+            delegation_key=SecretStr("d" * 32),
             identity_key=SecretStr("a" * 32),
         )
         with pytest.raises(TravelFailure, match=expected):
@@ -195,7 +223,11 @@ async def test_manager_calls_real_worker_asgi_over_a2a_and_reviews_result():
     )
 
     app = create_app(
-        settings=Settings(api_key="a" * 32, gateway_api_key="b" * 32, mcp_schema_digest="1" * 64),
+        settings=Settings(
+            delegation_key="d" * 32,
+            api_key="a" * 32,
+            mcp_schema_digest="1" * 64,
+        ),
         service=TravelService(provider=model, clock=lambda: now),
     )
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app)) as client:
@@ -207,6 +239,7 @@ async def test_manager_calls_real_worker_asgi_over_a2a_and_reviews_result():
             },
             client=A2AWorkerClient(api_key=SecretStr("a" * 32), timeout=5, client=client),
             supervisor=reviewer(),
+            delegation_key=SecretStr("d" * 32),
             identity_key=SecretStr("c" * 32),
             clock=lambda: now,
         )
@@ -266,7 +299,7 @@ async def test_evidence_expiring_during_review_is_rejected():
                     "artifacts": [
                         {
                             "artifactId": "a",
-                            "parts": [{"kind": "text", "text": answer.model_dump_json()}],
+                            "parts": [{"kind": "text", "text": signed_reply(req, answer)}],
                         }
                     ],
                 },
@@ -280,6 +313,7 @@ async def test_evidence_expiring_during_review_is_rejected():
             },
             client=A2AWorkerClient(api_key=SecretStr("key"), timeout=3, client=http),
             supervisor=reviewer(),
+            delegation_key=SecretStr("d" * 32),
             identity_key=SecretStr("x" * 32),
             clock=lambda: next(time_values),
         )
@@ -344,7 +378,7 @@ async def test_manager_recomputes_currency_exchange_receipts(tampered):
                 "result": {
                     "status": {"state": "completed"},
                     "artifacts": [
-                        {"parts": [{"kind": "text", "text": response.model_dump_json()}]}
+                        {"parts": [{"kind": "text", "text": signed_reply(request, response)}]}
                     ],
                 },
             },
@@ -359,6 +393,7 @@ async def test_manager_recomputes_currency_exchange_receipts(tampered):
             },
             client=A2AWorkerClient(api_key=SecretStr("fixture"), timeout=5, client=client),
             supervisor=reviewer(),
+            delegation_key=SecretStr("d" * 32),
             identity_key=SecretStr("x" * 32),
             clock=lambda: now,
         )
@@ -382,3 +417,22 @@ async def test_manager_recomputes_currency_exchange_receipts(tampered):
             result = await manager.manage(**arguments)
             assert result.response.exchange_comparisons[0].received_minor == 10000
             assert len(result.review_run_ids) == 2
+
+
+async def test_manager_identity_matches_api_contract_and_is_user_trip_scoped():
+    async with httpx.AsyncClient() as client:
+        manager = PersonalTripManager(
+            workers={},
+            client=A2AWorkerClient(api_key=SecretStr("fixture"), timeout=5, client=client),
+            supervisor=reviewer(),
+            identity_key=SecretStr("d" * 32),
+            delegation_key=SecretStr("e" * 32),
+        )
+        profile = Profile(subject="verified", trip_id="東京", revision="1")
+        identity = manager.manager_id(profile)
+        assert (
+            identity
+            == "trip-manager-eec1e0a022fe5a46c471ddeb38811901e1bda2af56938a7908b3fb6b0850d7e6"
+        )
+        assert identity != manager.manager_id(profile.model_copy(update={"subject": "other"}))
+        assert identity != manager.manager_id(profile.model_copy(update={"trip_id": "other"}))
