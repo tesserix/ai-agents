@@ -33,8 +33,14 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def gateway_only(self) -> Self:
         origin = urlsplit(self.mcp_gateway_origin)
-        if origin.scheme != "https" or not origin.hostname or origin.path not in ("", "/"):
-            raise ValueError("MCP gateway must be an HTTPS origin")
+        internal_gateway = (
+            self.mcp_gateway_origin
+            == "http://agentgateway-mcp.agentgateway-system.svc.cluster.local:8082"
+        )
+        if (origin.scheme != "https" and not internal_gateway) or not origin.hostname:
+            raise ValueError("MCP gateway must use HTTPS or the exact internal mesh gateway")
+        if origin.path not in ("", "/"):
+            raise ValueError("MCP gateway must be an origin")
         if origin.username or origin.password or origin.query or origin.fragment:
             raise ValueError("invalid MCP gateway origin")
         if not self.mcp_gateway_path.startswith("/mcp/roamie/") or any(
