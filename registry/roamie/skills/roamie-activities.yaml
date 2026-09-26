@@ -4,7 +4,7 @@ metadata:
   name: roamie-activities
   namespace: roamie
   tenantId: roamie
-  tag: 1.0.2
+  tag: 1.0.3
   visibility: public
   labels:
     app.kubernetes.io/part-of: roamie
