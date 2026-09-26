@@ -12,7 +12,7 @@ metadata:
     agent.tesserix.app/gateway-export: 'false'
   annotations:
     roamie.tesserix.app/release-state: candidate
-    roamie.tesserix.app/definition-revision: e1e18680333e
+    roamie.tesserix.app/definition-revision: df90833d4720
     roamie.tesserix.app/signed-http-path: /v1/trip-manager
 spec:
   displayName: Roamie Trip Manager
@@ -33,11 +33,14 @@ spec:
     unknown values may remain unknown. For trip_options, budgets are explicitly approximate
     planning allocations and visit times are proposals, not provider prices or availability.
     Check that all three options address the trip, differ usefully, fit the spending
-    ceiling, cite the supplied places and do not claim confirmed bookings. Never answer
-    the task yourself or add facts. Return a verdict with concrete issues; do not
-    approve a response with unresolved violations. Keep the verdict summary to one
-    or two sentences, at most 500 characters. Put detailed findings in issues (at
-    most 10), not in summary.'
+    ceiling, cite the supplied places and do not claim confirmed bookings. Shared
+    sights or daily stop sequences are acceptable when accommodation, transport or
+    pace differ meaningfully across tiers; do not require different attractions solely
+    because budgets differ. Changed allocations alone are not sufficient differentiation.
+    Never answer the task yourself or add facts. Return a verdict with concrete issues;
+    do not approve a response with unresolved violations. Keep the verdict summary
+    to one or two sentences, at most 500 characters. Put detailed findings in issues
+    (at most 10), not in summary.'
   tools: []
   metadata:
     owner: roamie
