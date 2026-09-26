@@ -14,6 +14,7 @@ from starlette.responses import Response
 from roamie_agents.api import SourceFactory
 from roamie_agents.base import Contract
 from roamie_agents.contracts import RecommendationRequest, Specialist
+from roamie_agents.diagnostics import record_failure
 from roamie_agents.manager import ManagedResponse, PersonalTripManager, Profile, planning_dates
 from roamie_agents.runtime import TravelFailure
 
@@ -66,7 +67,8 @@ def create_manager_app(
         try:
             async with slots, asyncio.timeout(80):
                 return await call_next(request)
-        except TimeoutError:
+        except TimeoutError as error:
+            record_failure("manager", error)
             return JSONResponse({"detail": "trip manager deadline exceeded"}, status_code=503)
 
     @app.get("/healthz")
@@ -144,6 +146,7 @@ def create_manager_app(
                 raise HTTPException(401, "profile snapshot expired during review")
             return result
         except (TravelFailure, TimeoutError) as error:
+            record_failure("manager", error)
             raise HTTPException(503, "trip manager could not validate this response") from error
 
     return app

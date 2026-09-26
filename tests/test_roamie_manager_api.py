@@ -85,11 +85,17 @@ async def test_signed_profile_boundary_fails_closed(raw, authorization, delegate
             assert result.status_code == status
 
 
-async def test_provider_failure_returns_unavailable_without_exposing_error():
+@pytest.mark.parametrize(
+    "reason,expected",
+    [("model_failed", "model_failed"), ("sensitive upstream detail", "unclassified")],
+)
+async def test_provider_failure_returns_unavailable_without_exposing_error(reason, expected):
+    from structlog.testing import capture_logs
+
     from roamie_agents.runtime import TravelFailure
 
     async def sources(token):
-        raise TravelFailure("sensitive upstream detail")
+        raise TravelFailure(reason)
         yield
 
     async with httpx.AsyncClient() as worker_http:
@@ -113,16 +119,24 @@ async def test_provider_failure_returns_unavailable_without_exposing_error():
             transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
             base_url="http://test",
         ) as client:
-            result = await client.post(
-                "/v1/trip-manager",
-                content=raw,
-                headers={
-                    "Authorization": "Bearer " + "a" * 32,
-                    "X-Roamie-Gateway-Token": "fixture",
-                    "X-Roamie-Profile-Signature": hmac.new(
-                        b"b" * 32, raw, hashlib.sha256
-                    ).hexdigest(),
-                },
-            )
+            with capture_logs() as logs:
+                result = await client.post(
+                    "/v1/trip-manager",
+                    content=raw,
+                    headers={
+                        "Authorization": "Bearer " + "a" * 32,
+                        "X-Roamie-Gateway-Token": "fixture",
+                        "X-Roamie-Profile-Signature": hmac.new(
+                            b"b" * 32, raw, hashlib.sha256
+                        ).hexdigest(),
+                    },
+                )
         assert result.status_code == 503
         assert "sensitive" not in result.text
+
+        failure = next(event for event in logs if event["event"] == "roamie_request_failed")
+        assert failure["reason"] == expected
+        assert failure["component"] == "manager"
+        assert len(failure["request_id"]) == 32
+        assert "sensitive" not in json.dumps(logs)
+        assert "fixture" not in json.dumps(logs)

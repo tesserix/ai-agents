@@ -144,3 +144,23 @@ async def test_planning_checks_cannot_be_scheduled_as_places(kind):
         await service.recommend(
             Specialist.TRIP, request(), facts=[evidence().model_copy(update={"category": kind})]
         )
+
+
+async def test_rejected_plan_records_terminal_run_without_model_or_profile_payload():
+    import json
+
+    from structlog.testing import capture_logs
+
+    output = proposal()
+    output["options"][0]["days"][0]["stops"][0]["evidence_id"] = "private-hallucination"
+    service = TravelService(
+        provider=ScriptedProvider(ModelResponse(content=json.dumps(output))), clock=lambda: NOW
+    )
+    with capture_logs() as logs, pytest.raises(TravelFailure, match="invalid_planning_stop"):
+        await service.recommend(Specialist.TRIP, request(), facts=[evidence()])
+    event = next(item for item in logs if item["event"] == "roamie_model_finished")
+    assert event["state"] == "completed"
+    assert event["specialist"] == "trip-planner"
+    assert event["run_id"]
+    assert "private-hallucination" not in json.dumps(logs)
+    assert "Three Vietnam plans" not in json.dumps(logs)
