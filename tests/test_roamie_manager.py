@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import hmac
 import json
@@ -543,7 +544,8 @@ async def test_manager_independently_validates_three_plans_before_final_review(c
 
 
 @pytest.mark.parametrize("planning", [False, True])
-async def test_trip_consults_weather_and_entry_before_itinerary_review(planning):
+@pytest.mark.parametrize("fail_advisory", [False, True])
+async def test_trip_consults_weather_and_entry_before_itinerary_review(planning, fail_advisory):
     from roamie_agents.contracts import Evidence, project
 
     now = datetime.now(UTC)
@@ -563,14 +565,28 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(planning)
 
         facts[-1] = evidence().model_copy(update={"category": Specialist.TRIP, "observed_at": now})
     called = []
+    advisors_started = asyncio.Event()
+    sibling_cancelled = asyncio.Event()
 
-    def reply(request):
+    async def reply(request):
         body = json.loads(request.content)
         incoming = DelegatedRequest.model_validate_json(
             body["params"]["message"]["parts"][0]["text"]
         )
         kind = incoming.context.specialist
         called.append(kind)
+        if kind in kinds[:2]:
+            if all(item in called for item in kinds[:2]):
+                advisors_started.set()
+            async with asyncio.timeout(1):
+                await advisors_started.wait()
+            if fail_advisory:
+                if kind == Specialist.WEATHER:
+                    raise httpx.ConnectError("provider unavailable")
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    sibling_cancelled.set()
         assert kind == Specialist.TRIP or not incoming.payload.request.plan_options
         if kind != Specialist.TRIP:
             assert incoming.payload.request.prompt != "Plan"
@@ -626,7 +642,7 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(planning)
             identity_key=SecretStr("a" * 32),
             delegation_key=SecretStr("d" * 32),
         )
-        result = await manager.manage(
+        operation = manager.manage(
             profile=Profile(
                 subject="user",
                 trip_id="trip",
@@ -639,6 +655,13 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(planning)
             request=RecommendationRequest(prompt="Plan", plan_options=planning),
             facts=facts,
         )
+        if fail_advisory:
+            with pytest.raises(TravelFailure, match="manager_review_unavailable"):
+                await operation
+            assert sibling_cancelled.is_set()
+            assert Specialist.TRIP not in called
+            return
+        result = await operation
     assert called == list(kinds)
     assert [item.specialist for item in result.advisories] == list(kinds[:2])
     assert "planning_checks" in "".join(
@@ -659,3 +682,22 @@ def test_multi_destination_dates_stay_within_confirmed_trip():
             profile,
             RecommendationRequest(prompt="Tokyo", start_date="2026-10-04", end_date="2026-10-20"),
         )
+
+
+async def test_three_plan_review_accepts_measured_input_within_its_budget():
+    provider = ScriptedProvider(
+        ModelResponse(
+            content=json.dumps(
+                {"decision": "approve", "confidence": 1.0, "summary": "Checked", "issues": []}
+            ),
+            usage={"input_tokens": 23531, "output_tokens": 100},
+        ),
+        capabilities=ModelCapabilities(structured_output=True, context_window_tokens=65536),
+    )
+    result = await SupervisorService(provider=provider, definition=manager_definition()).supervise(
+        task="Review three sourced trip options",
+        answer="Three reviewed itineraries",
+        tenant="roamie",
+    )
+    assert result.verdict.decision == "approve"
+    assert result.input_tokens == 23531

@@ -55,10 +55,11 @@ class MCPSource:
                         "request": request.model_dump(
                             mode="json",
                             exclude={
-                                "destination_country",
-                                "passport_country",
-                                "residence_country",
-                                "travel_purpose",
+                                "destination_country": True,
+                                "passport_country": True,
+                                "residence_country": True,
+                                "travel_purpose": True,
+                                "stays": {"__all__": {"country", "origin"}},
                             },
                         ),
                     },

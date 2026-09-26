@@ -187,7 +187,8 @@ class PersonalTripManager:
         bounded = RecommendationRequest.model_validate(effective)
         advisories: list[TravelResponse] = []
         if specialist == Specialist.TRIP:
-            for kind in (Specialist.WEATHER, Specialist.ENTRY):
+
+            async def review_advisory(kind: Specialist) -> TravelResponse:
                 supporting = [fact for fact in facts if fact.category == kind]
                 if supporting:
                     advisory = await self._manage(
@@ -214,20 +215,28 @@ class PersonalTripManager:
                         None,
                         None,
                     )
-                    advisories.append(advisory.response)
+                    return advisory.response
                 else:
-                    advisories.append(
-                        TravelResponse(
-                            specialist=kind,
-                            status="unavailable",
-                            limitations=(
-                                (
-                                    "This planning check could not be verified. "
-                                    "Check official sources before booking."
-                                ),
+                    return TravelResponse(
+                        specialist=kind,
+                        status="unavailable",
+                        limitations=(
+                            (
+                                "This planning check could not be verified. "
+                                "Check official sources before booking."
                             ),
-                        )
+                        ),
                     )
+
+            try:
+                async with asyncio.TaskGroup() as group:
+                    checks = [
+                        group.create_task(review_advisory(kind))
+                        for kind in (Specialist.WEATHER, Specialist.ENTRY)
+                    ]
+            except ExceptionGroup as error:
+                raise TravelFailure("manager_review_unavailable") from error
+            advisories = [check.result() for check in checks]
         candidates = [
             fact
             for fact in facts

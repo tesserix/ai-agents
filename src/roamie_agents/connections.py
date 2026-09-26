@@ -1,4 +1,6 @@
+import asyncio
 from collections.abc import AsyncIterator
+from datetime import timedelta
 
 import httpx
 from tesserix_adk.adapters.mcp_transport import HttpTransport, TransportSession
@@ -105,6 +107,45 @@ class PlanningSources:
         self.entry = EntryGuidanceSource()
 
     async def search(self, specialist: Specialist, request: RecommendationRequest) -> EvidenceBatch:
+        if specialist in (Specialist.WEATHER, Specialist.ENTRY) and request.stays:
+            if request.start_date is None or request.end_date is None:
+                return EvidenceBatch(status="unavailable")
+            if (
+                sum(stay.days for stay in request.stays)
+                != (request.end_date - request.start_date).days + 1
+            ):
+                return EvidenceBatch(status="unavailable")
+            start = request.start_date
+            requests = []
+            for stay in request.stays:
+                end = start + timedelta(days=stay.days - 1)
+                requests.append(
+                    request.model_copy(
+                        update={
+                            "stays": (),
+                            "destination": stay.destination,
+                            "origin": stay.origin,
+                            "destination_country": stay.country,
+                            "start_date": start,
+                            "end_date": end,
+                        }
+                    )
+                )
+                start = end + timedelta(days=1)
+            async with asyncio.TaskGroup() as group:
+                tasks = [group.create_task(self.search(specialist, item)) for item in requests]
+            facts = [
+                fact.model_copy(
+                    update={
+                        "id": f"stay-{index}-{fact.id}",
+                        "destination": item.destination,
+                        "name": f"{item.destination}: {fact.name}"[:200],
+                    }
+                )
+                for index, (item, task) in enumerate(zip(requests, tasks, strict=True))
+                for fact in task.result().facts
+            ]
+            return EvidenceBatch(status="ok" if facts else "unavailable", facts=facts)
         if specialist == Specialist.WEATHER:
             return await self.weather.search(specialist, request)
         if specialist == Specialist.ENTRY:
