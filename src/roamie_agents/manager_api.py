@@ -14,7 +14,7 @@ from starlette.responses import Response
 from roamie_agents.api import SourceFactory
 from roamie_agents.base import Contract
 from roamie_agents.contracts import RecommendationRequest, Specialist
-from roamie_agents.manager import ManagedResponse, PersonalTripManager, Profile
+from roamie_agents.manager import ManagedResponse, PersonalTripManager, Profile, planning_dates
 from roamie_agents.runtime import TravelFailure
 
 
@@ -114,7 +114,21 @@ def create_manager_app(
             if await profile_authority(snapshot.profile) != snapshot.profile.revision:
                 raise TravelFailure("profile_changed")
             async with asynccontextmanager(sources)(gateway_token) as source:
-                batch = await source.search(snapshot.specialist, snapshot.request)
+                search_request = snapshot.request.model_copy(
+                    update=planning_dates(snapshot.profile, snapshot.request)
+                )
+                batch = await source.search(snapshot.specialist, search_request)
+                if snapshot.specialist == Specialist.TRIP:
+                    checks = await asyncio.gather(
+                        *(
+                            source.search(kind, search_request)
+                            for kind in (Specialist.WEATHER, Specialist.ENTRY)
+                        )
+                    )
+                    extra = [fact for check in checks for fact in check.facts]
+                    batch = batch.model_copy(
+                        update={"facts": [*batch.facts[: 40 - len(extra)], *extra]}
+                    )
             if batch.status != "ok":
                 raise HTTPException(503, "provider evidence unavailable")
             result = await manager.manage(

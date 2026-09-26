@@ -135,3 +135,32 @@ async def test_adk_mcp_session_discovers_and_calls_only_pinned_gateway_tool(stat
 def test_model_settings_reject_provider_and_unscoped_gateway_endpoints(endpoint):
     with pytest.raises(ValidationError, match="Roamie model requests must use Agent Gateway"):
         settings(mcp_schema_digest="1" * 64, gateway_base_url=endpoint)
+
+
+async def test_weather_uses_own_transport_without_gateway_credentials():
+    def weather_reply(request):
+        assert request.url.host == "weather.googleapis.com"
+        assert "authorization" not in request.headers
+        assert request.headers["X-Goog-Api-Key"] == "weather-only"
+        return httpx.Response(200, json={"forecastDays": []})
+
+    from datetime import date
+
+    from roamie_agents.contracts import Location
+
+    async with asynccontextmanager(source_session)(
+        settings(mcp_schema_digest="1" * 64, weather_api_key="weather-only"),
+        "private-gateway-token",
+        transport=httpx.MockTransport(lambda _: pytest.fail("weather must not call the gateway")),
+        weather_transport=httpx.MockTransport(weather_reply),
+    ) as source:
+        batch = await source.search(
+            Specialist.WEATHER,
+            RecommendationRequest(
+                prompt="Weather",
+                origin=Location(latitude=1, longitude=2),
+                start_date=date.today(),
+                end_date=date.today(),
+            ),
+        )
+    assert batch.status == "ok"

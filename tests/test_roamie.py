@@ -192,7 +192,9 @@ async def test_http_edge_exposes_workers_only_through_a2a():
             )
         ).status_code == 404
         assert (await client.get("/v1/agents")).status_code == 401
-        assert len((await client.get("/v1/agents", headers=headers)).json()["agents"]) == 7
+        assert len((await client.get("/v1/agents", headers=headers)).json()["agents"]) == len(
+            Specialist
+        )
 
 
 @pytest.mark.parametrize(

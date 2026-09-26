@@ -9,7 +9,7 @@ def test_roamie_agents_reference_published_skills():
     skills = {
         yaml.safe_load(p.read_text())["metadata"]["name"] for p in (root / "skills").glob("*.yaml")
     }
-    assert len(skills) == 8
+    assert len(skills) == 10
     for agent in agents:
         assert agent["spec"]["skills"][0]["ref"] in skills
 
@@ -22,7 +22,7 @@ def test_roamie_catalog_names_are_unique_across_kinds():
         for p in root.glob(pattern)
     ]
     keys = [(d["metadata"]["namespace"], d["metadata"]["name"]) for d in documents]
-    assert len(keys) == 16
+    assert len(keys) == 20
     assert len(set(keys)) == len(keys)
 
 
@@ -31,7 +31,7 @@ def test_roamie_definitions_are_discoverable_without_enabling_routes():
         for path in Path("registry/roamie").glob(pattern):
             document = yaml.safe_load(path.read_text())
             assert document["metadata"]["visibility"] == "public"
-            assert document["metadata"]["tag"] == "1.0.5"
+            assert document["metadata"]["tag"] == "1.0.6"
             assert document["metadata"]["labels"]["agent.tesserix.app/gateway-export"] == "false"
 
 
@@ -57,7 +57,7 @@ def test_roamie_agents_resolve_pinned_runtime_and_dependencies():
         assert spec["runtime"]["type"] == "container"
         assert "@sha256:" in spec["runtime"]["image"]
         assert len(spec["runtime"]["image"].split("@sha256:")[1]) == 64
-        assert spec["skills"] == [{"ref": name, "version": "1.0.5"}]
+        assert spec["skills"] == [{"ref": name, "version": "1.0.6"}]
         assert spec["tools"] == [{"ref": "roamie-travel-search", "version": "1.0.1"}]
         assert spec["mcpServers"] == [{"ref": "roamie-travel-mcp", "version": "1.0.1"}]
 

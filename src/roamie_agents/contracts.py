@@ -10,6 +10,8 @@ from roamie_agents.exchange import ExchangeComparison
 
 
 class Specialist(StrEnum):
+    WEATHER = "weather"
+    ENTRY = "entry-guidance"
     TRIP = "trip-planner"
     FOOD = "food"
     ROUTES = "routes"
@@ -24,6 +26,10 @@ class RecommendationRequest(Contract):
     exchange_destination_currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
     prompt: str = Field(min_length=1, max_length=6000)
     origin: Location | None = None
+    destination_country: str | None = Field(default=None, pattern=r"^[A-Z]{2}$")
+    passport_country: str | None = Field(default=None, pattern=r"^[A-Z]{2}$")
+    residence_country: str | None = Field(default=None, pattern=r"^[A-Z]{2}$")
+    travel_purpose: Literal["tourism", "business", "study", "transit"] = "tourism"
     destination: str = Field(default="", max_length=200)
     start_date: date | None = None
     end_date: date | None = None
@@ -60,9 +66,45 @@ class RecommendationRequest(Contract):
         return self
 
 
+class WeatherDetails(Contract):
+    coverage: Literal["forecast", "complete", "partial", "unavailable"]
+    local_date: date | None = None
+    timezone: str | None = None
+    maximum_celsius: float | None = Field(default=None, ge=-100, le=70)
+    minimum_celsius: float | None = Field(default=None, ge=-100, le=70)
+    precipitation_percent: int | None = Field(default=None, ge=0, le=100)
+    uv_index: float | None = Field(default=None, ge=0, le=30)
+    missing_dates: tuple[str, ...] = ()
+    suggestions: tuple[str, ...] = ()
+
+
+class EntryDetails(Contract):
+    verification: Literal["official_links_only", "verified"] = "official_links_only"
+    destination_country: str | None = None
+    passport_country: str | None = None
+    residence_country: str | None = None
+    visa_required: bool | None = None
+    visa_fee_minor: int | None = Field(default=None, ge=0)
+    visa_fee_currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
+    checklist: tuple[str, ...] = ()
+    missing_information: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def verified_fees(self) -> Self:
+        if self.verification != "verified" and (
+            self.visa_required is not None or self.visa_fee_minor is not None
+        ):
+            raise ValueError("unverified guidance cannot assert eligibility or fees")
+        if (self.visa_fee_minor is None) != (self.visa_fee_currency is None):
+            raise ValueError("visa fee requires its original currency")
+        return self
+
+
 class Evidence(Contract):
     id: str = Field(min_length=1, max_length=120)
     name: str = Field(min_length=1, max_length=200)
+    weather: WeatherDetails | None = None
+    entry: EntryDetails | None = None
     category: Specialist
     source_url: HttpUrl
     observed_at: AwareDatetime

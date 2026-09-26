@@ -89,7 +89,7 @@ def test_registry_publish_uses_repository_bound_oidc_route():
     )
     job = workflow["jobs"]["registry"]
 
-    assert job["permissions"] == {"contents": "read", "id-token": "write"}
+    assert job["permissions"] == {"contents": "read", "id-token": "write", "packages": "read"}
     publish = next(
         step for step in job["steps"] if step.get("name") == "Publish reviewed Agent manifests"
     )
