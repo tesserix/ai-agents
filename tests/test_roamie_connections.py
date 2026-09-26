@@ -4,7 +4,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
-from pydantic import SecretStr
+import pytest
+from pydantic import SecretStr, ValidationError
 from tesserix_adk.core import Message, ModelRequest, TextPart
 
 from roamie_agents.config import Settings
@@ -111,3 +112,18 @@ async def test_adk_mcp_session_discovers_and_calls_only_pinned_gateway_tool():
         batch = await source.search(Specialist.FOOD, RecommendationRequest(prompt="Dinner"))
     assert batch.status == "unavailable"
     assert calls[-1] == "tools/call"
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "https://aiplatform.googleapis.com/v1",
+        "https://generativelanguage.googleapis.com/v1beta",
+        "https://api.openai.com/v1",
+        "http://ai-gateway.agentgateway-system.svc.cluster.local:8080/v1",
+        "http://ai-gateway.agentgateway-system.svc.cluster.local:8080/roamie/v1?key=secret",
+    ],
+)
+def test_model_settings_reject_provider_and_unscoped_gateway_endpoints(endpoint):
+    with pytest.raises(ValidationError, match="Roamie model requests must use Agent Gateway"):
+        settings(mcp_schema_digest="1" * 64, gateway_base_url=endpoint)

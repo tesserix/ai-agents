@@ -32,6 +32,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def gateway_only(self) -> Self:
+        if self.gateway_base_url != (
+            "http://ai-gateway.agentgateway-system.svc.cluster.local:8080/roamie/v1"
+        ):
+            raise ValueError("Roamie model requests must use Agent Gateway")
         origin = urlsplit(self.mcp_gateway_origin)
         internal_gateway = (
             self.mcp_gateway_origin
