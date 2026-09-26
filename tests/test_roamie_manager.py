@@ -661,6 +661,16 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(planning,
             request=RecommendationRequest(prompt="Plan", plan_options=planning),
             facts=facts,
         )
+    preflight_text = "".join(part.text for part in model.requests[0].messages[-1].content)
+    preflight_context = json.loads(
+        preflight_text.split("CONTEXT:\n", 1)[1].split("\n\nPROPOSED REQUEST", 1)[0]
+    )
+    assert {fact["category"] for fact in preflight_context["evidence"]} == {"trip-planner"}
+    final_text = "".join(part.text for part in model.requests[-1].messages[-1].content)
+    final_context = json.loads(final_text.split("CONTEXT:\n", 1)[1].split("\n\nANSWER", 1)[0])
+    assert {fact["category"] for fact in final_context["evidence"]} == {
+        kind.value for kind in kinds
+    }
     assert set(called) == (set(kinds) if advisory_decision == "approve" else {Specialist.TRIP})
     if advisory_decision == "amend":
         assert all(item.status == "unavailable" for item in result.advisories)

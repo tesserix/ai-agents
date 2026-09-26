@@ -271,14 +271,31 @@ class PersonalTripManager:
         )
         if len(context.encode()) > 40000:
             raise TravelFailure("context_too_large")
+        request_context = json.loads(context)
+        if specialist == Specialist.TRIP:
+            request_context["evidence"] = [
+                fact.model_dump(mode="json")
+                for fact in candidates
+                if fact.category not in (Specialist.WEATHER, Specialist.ENTRY)
+            ]
+        review_task = (
+            "Check whether the proposed travel request is compatible with the confirmed "
+            "profile constraints. This is a pre-execution review, not a completed answer."
+        )
+        if specialist == Specialist.TRIP:
+            review_task += (
+                " This stage checks a proposed itinerary. Weather and entry preparation are "
+                "reviewed separately before the final response. Missing passport or residence "
+                "details do not prevent proposing visits, accommodation styles and budget "
+                "allocations. Require those details if the user explicitly asks for verified "
+                "entry eligibility or visa fees; never imply those facts are verified. "
+                "Continue enforcing every applicable saved profile constraint."
+            )
         preflight = await self._supervisor.supervise(
-            task=(
-                "Check whether the proposed travel request is compatible with the confirmed "
-                "profile constraints. This is a pre-execution review, not a completed answer."
-            ),
+            task=review_task,
             stage="request",
             answer=bounded.prompt,
-            context=context,
+            context=json.dumps(request_context),
             tenant="roamie",
         )
         if preflight.verdict.decision != "approve" or preflight.verdict.confidence < 0.8:
