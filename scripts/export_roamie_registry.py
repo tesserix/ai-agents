@@ -15,7 +15,7 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
             "name": f"{agent.name}-agent",
             "namespace": "roamie",
             "tenantId": "roamie",
-            "tag": "1.0.1",
+            "tag": "1.0.2",
             "visibility": "public",
             "labels": {
                 "app.kubernetes.io/part-of": "roamie",
@@ -33,19 +33,33 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
             "model": {"provider": "solo-agentgateway", "name": "roamie-auto"},
             "a2a": {
                 "url": f"http://agentgateway-mcp.agentgateway-system.svc.cluster.local:8082/a2a/v1/{agent.name}",
-                "preferredTransport": "JSONRPC",
                 "capabilities": {"streaming": False, "pushNotifications": False},
                 "defaultInputModes": ["application/json"],
                 "defaultOutputModes": ["application/json"],
             },
-            "skills": [
-                {
-                    "id": agent.name,
-                    "name": agent.name,
-                    "description": "Profile-constrained travel assistance with sourced evidence.",
-                    "tags": ["roamie", "travel", "profile-reviewed"],
-                }
-            ],
+            "definitionVersion": "v1",
+            "framework": "tesserix-adk",
+            "runtime": {
+                "type": "container",
+                "protocol": "http",
+                "image": (
+                    "ghcr.io/tesserix/ai-agents-roamie-manager@sha256:"
+                    "577572a975df94729ad82523f1c0f316e736a366fbe8818917e31d5f3ced1255"
+                    if agent.name == "roamie-trip-manager"
+                    else "ghcr.io/tesserix/ai-agents-roamie@sha256:"
+                    "4746b726f9641910db037cd98e7ae90798f431644f4054484b82f02207981f6d"
+                ),
+                "port": 8080,
+                "path": (
+                    "/v1/trip-manager"
+                    if agent.name == "roamie-trip-manager"
+                    else f"/a2a/v1/{agent.name}"
+                ),
+                "healthPath": "/healthz",
+            },
+            "skills": [{"ref": agent.name, "version": "1.0.2"}],
+            "tools": [{"ref": "roamie-travel-search", "version": "1.0.1"}],
+            "mcpServers": [{"ref": "roamie-travel-mcp", "version": "1.0.1"}],
         },
     }
     if agent.name == "roamie-trip-manager":
@@ -66,7 +80,7 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
             "description": manifest["spec"]["description"],
             "category": "travel",
             "instructions": agent.instructions,
-            "tools": [] if agent.name == "roamie-trip-manager" else ["travel_search"],
+            "tools": [] if agent.name == "roamie-trip-manager" else ["roamie-travel-search"],
             "metadata": {
                 "owner": "roamie",
                 "managerReviewRequired": True,

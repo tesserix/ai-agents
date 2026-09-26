@@ -11,7 +11,7 @@ def test_roamie_agents_reference_published_skills():
     }
     assert len(skills) == 8
     for agent in agents:
-        assert agent["spec"]["skills"][0]["name"] in skills
+        assert agent["spec"]["skills"][0]["ref"] in skills
 
 
 def test_roamie_catalog_names_are_unique_across_kinds():
@@ -31,5 +31,20 @@ def test_roamie_definitions_are_discoverable_without_enabling_routes():
         for path in Path("registry/roamie").glob(pattern):
             document = yaml.safe_load(path.read_text())
             assert document["metadata"]["visibility"] == "public"
-            assert document["metadata"]["tag"] == "1.0.1"
+            assert document["metadata"]["tag"] == "1.0.2"
             assert document["metadata"]["labels"]["agent.tesserix.app/gateway-export"] == "false"
+
+
+def test_roamie_agents_resolve_pinned_runtime_and_dependencies():
+    for path in Path("registry/roamie").glob("*.yaml"):
+        document = yaml.safe_load(path.read_text())
+        spec = document["spec"]
+        name = document["metadata"]["name"].removesuffix("-agent")
+        assert spec["definitionVersion"] == "v1"
+        assert spec["framework"] == "tesserix-adk"
+        assert spec["runtime"]["type"] == "container"
+        assert "@sha256:" in spec["runtime"]["image"]
+        assert len(spec["runtime"]["image"].split("@sha256:")[1]) == 64
+        assert spec["skills"] == [{"ref": name, "version": "1.0.2"}]
+        assert spec["tools"] == [{"ref": "roamie-travel-search", "version": "1.0.1"}]
+        assert spec["mcpServers"] == [{"ref": "roamie-travel-mcp", "version": "1.0.1"}]

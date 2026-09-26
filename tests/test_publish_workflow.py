@@ -177,7 +177,7 @@ def test_roamie_mcp_publication_uses_a_pinned_release_and_scoped_identity() -> N
     )
     assert checkout["if"] == "github.event_name == 'push' || inputs.publish_roamie"
     assert checkout["with"]["repository"] == "tesserix/roamie"
-    assert checkout["with"]["ref"] == "0f4651ddc1d39c76cedc26512168b7b8709124d7"
+    assert checkout["with"]["ref"] == "a0eb6de4c7f652b797c4613c331bc65b1d0ff5ff"
     assert checkout["with"]["persist-credentials"] is False
     publish = next(
         step for step in job["steps"] if step.get("name") == "Publish reviewed Agent manifests"
@@ -191,6 +191,10 @@ def test_roamie_mcp_publication_uses_a_pinned_release_and_scoped_identity() -> N
 
 def test_roamie_publication_runs_on_main_push_after_verification() -> None:
     job = yaml.safe_load(PUBLISH_WORKFLOW.read_text())["jobs"]["registry"]
+    assert job["if"] == (
+        "github.ref == 'refs/heads/main' && "
+        "(github.event_name == 'push' || github.event_name == 'workflow_dispatch')"
+    )
     assert set(job["needs"]) == {"verify", "image"}
     assert "github.ref == 'refs/heads/main'" in job["if"]
     publish = next(
@@ -200,3 +204,13 @@ def test_roamie_publication_runs_on_main_push_after_verification() -> None:
         publish["env"]["PUBLISH_ROAMIE"]
         == "${{ github.event_name == 'push' || inputs.publish_roamie }}"
     )
+
+
+def test_roamie_dependencies_publish_before_agents():
+    job = yaml.safe_load(PUBLISH_WORKFLOW.read_text())["jobs"]["registry"]
+    publish = next(s for s in job["steps"] if s.get("name") == "Publish reviewed Agent manifests")
+    assert (
+        ".roamie-release/services/travel-mcp/tool.json "
+        ".roamie-release/services/travel-mcp/mcpserver.json "
+        "registry/roamie/skills/*.yaml registry/roamie/*.yaml"
+    ) in publish["run"]
