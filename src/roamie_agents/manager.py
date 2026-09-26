@@ -141,6 +141,66 @@ class PersonalTripManager:
         ).hexdigest()
         return f"trip-manager-{identity}"
 
+    async def _planning_advisories(
+        self,
+        profile: Profile,
+        current_revision: Callable[[], str | Awaitable[str]],
+        request: RecommendationRequest,
+        facts: Sequence[Evidence],
+    ) -> list[TravelResponse]:
+        async def check(kind: Specialist) -> TravelResponse:
+            supporting = [fact for fact in facts if fact.category == kind]
+            if not supporting:
+                return TravelResponse(
+                    specialist=kind,
+                    status="unavailable",
+                    limitations=(
+                        "This planning check could not be verified. "
+                        "Check official sources before booking.",
+                    ),
+                )
+            prompt = (
+                "Review weather for this destination and these dates. "
+                "Preserve forecast coverage warnings and preparation suggestions."
+                if kind == Specialist.WEATHER
+                else "Review entry preparation for this destination and these dates. "
+                "Provide the official-source checklist and clearly identify "
+                "unverified eligibility, fees and missing traveller information."
+            )
+            try:
+                result = await self._manage(
+                    profile,
+                    current_revision,
+                    kind,
+                    request.model_copy(update={"plan_options": False, "prompt": prompt}),
+                    supporting,
+                    None,
+                    None,
+                )
+                return result.response
+            except TravelFailure as error:
+                if str(error) != "request_requires_clarification":
+                    raise
+                return TravelResponse(
+                    specialist=kind,
+                    status="unavailable",
+                    limitations=(
+                        "Additional traveller information is required for this check. "
+                        "Verify official guidance before booking.",
+                    ),
+                )
+
+        tasks = [
+            asyncio.create_task(check(kind)) for kind in (Specialist.WEATHER, Specialist.ENTRY)
+        ]
+        try:
+            return list(await asyncio.gather(*tasks))
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
     async def _manage(
         self,
         profile: Profile,
@@ -186,48 +246,6 @@ class PersonalTripManager:
             raise TravelFailure("photo_not_authorized")
         bounded = RecommendationRequest.model_validate(effective)
         advisories: list[TravelResponse] = []
-        if specialist == Specialist.TRIP:
-            for kind in (Specialist.WEATHER, Specialist.ENTRY):
-                supporting = [fact for fact in facts if fact.category == kind]
-                if supporting:
-                    advisory = await self._manage(
-                        profile,
-                        current_revision,
-                        kind,
-                        bounded.model_copy(
-                            update={
-                                "plan_options": False,
-                                "prompt": (
-                                    "Review weather for this destination and these dates. "
-                                    "Preserve forecast coverage warnings "
-                                    "and preparation suggestions."
-                                    if kind == Specialist.WEATHER
-                                    else "Review entry preparation for this destination "
-                                    "and these dates. "
-                                    "Provide the official-source checklist and clearly identify "
-                                    "unverified eligibility, fees and "
-                                    "missing traveller information."
-                                ),
-                            }
-                        ),
-                        supporting,
-                        None,
-                        None,
-                    )
-                    advisories.append(advisory.response)
-                else:
-                    advisories.append(
-                        TravelResponse(
-                            specialist=kind,
-                            status="unavailable",
-                            limitations=(
-                                (
-                                    "This planning check could not be verified. "
-                                    "Check official sources before booking."
-                                ),
-                            ),
-                        )
-                    )
         candidates = [
             fact
             for fact in facts
@@ -276,7 +294,22 @@ class PersonalTripManager:
                 exchange_quotes=exchange_quotes or [],
             ),
         )
-        reply = await self._client.send(endpoint, delegation.model_dump_json())
+        checks = (
+            asyncio.create_task(
+                self._planning_advisories(profile, current_revision, bounded, facts)
+            )
+            if specialist == Specialist.TRIP
+            else None
+        )
+        try:
+            reply = await self._client.send(endpoint, delegation.model_dump_json())
+            if checks is not None:
+                advisories = await checks
+        finally:
+            if checks is not None:
+                if not checks.done():
+                    checks.cancel()
+                await asyncio.gather(checks, return_exceptions=True)
         if reply.state != "completed" or len(reply.text.encode()) > 65536:
             raise TravelFailure("invalid_worker_reply")
         response = self._delegations.verify_response(reply.text, delegation)
@@ -348,6 +381,11 @@ class PersonalTripManager:
                 raise TravelFailure("unsupported_accommodation")
         elif response.trip_options:
             raise TravelFailure("unexpected_trip_options")
+        review_context = json.loads(context)
+        review_context["planning_checks"] = [item.model_dump(mode="json") for item in advisories]
+        context = json.dumps(review_context)
+        if len(context.encode()) > 40000:
+            raise TravelFailure("context_too_large")
         reviewed = await self._supervisor.supervise(
             task=bounded.prompt,
             answer=response.model_dump_json(),
@@ -391,6 +429,12 @@ class PersonalTripManager:
                         )
                         if bounded.plan_options
                         else ()
+                    ),
+                    *(
+                        f"{advisory.specialist.value}: {limitation}"
+                        for advisory in advisories
+                        if advisory.status != "ok"
+                        for limitation in advisory.limitations
                     ),
                     *response.limitations,
                 )

@@ -141,3 +141,19 @@ claim mapping and a live end-to-end probe. The manager now verifies its complete
 profile with the private Roamie API before evidence collection and during review;
 that API must include the authoritative-profile migration and routes before rollout. These
 checks must pass before enabling the currently disabled workload chart.
+
+
+### Planning review bounds
+
+The manager checks the parent request before launching the itinerary worker and its
+independent weather/entry checks concurrently. Every specialist retains its own
+request and response review. The final itinerary review waits for these results;
+failed or cancelled requests cancel and await unfinished supporting work. Only
+clarification needed by an optional check becomes an explicit unavailable warning.
+Ownership, revision, signature and main-request review failures still stop delivery.
+
+Three itineraries plus their provider evidence exceeded the generic supervisor's
+16,000 input-token ceiling in a live Hanoi validation (17,205 tokens). Roamie's
+manager permits 32,000 input tokens per review run, with the existing two-call,
+output, model-context and time limits retained. The complete manager request stays
+within its 78-second deadline; token limits are not removed.

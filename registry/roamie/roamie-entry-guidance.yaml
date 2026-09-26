@@ -4,7 +4,7 @@ metadata:
   name: roamie-entry-guidance-agent
   namespace: roamie
   tenantId: roamie
-  tag: 1.1.1
+  tag: 1.1.2
   visibility: public
   labels:
     app.kubernetes.io/part-of: roamie
@@ -39,7 +39,7 @@ spec:
     healthPath: /healthz
   skills:
   - ref: roamie-entry-guidance
-    version: 1.1.1
+    version: 1.1.2
   tools:
   - ref: roamie-travel-search
     version: 1.1.0

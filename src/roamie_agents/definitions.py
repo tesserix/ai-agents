@@ -72,10 +72,15 @@ DEFINITIONS = {
 def manager_definition() -> AgentDefinition[Verdict]:
     from orchestrator_agent.definitions import SUPERVISOR
 
+    budget = SUPERVISOR.agent.budget
+    if budget is None:
+        raise ValueError("manager requires a bounded supervisor")
+
     return AgentDefinition.declared(
         agent=SUPERVISOR.agent.model_copy(
             update={
                 "name": "roamie-trip-manager",
+                "budget": budget.model_copy(update={"max_input_tokens": 32000}),
                 "model": "roamie-auto",
                 "instructions": (
                     "You are the traveller's personal trip manager and independent reviewer. "
