@@ -543,7 +543,8 @@ async def test_manager_independently_validates_three_plans_before_final_review(c
 
 
 @pytest.mark.parametrize("planning", [False, True])
-async def test_trip_consults_weather_and_entry_before_itinerary_review(planning):
+@pytest.mark.parametrize("advisory_decision", ["approve", "amend"])
+async def test_trip_consults_weather_and_entry_before_itinerary_review(planning, advisory_decision):
     from roamie_agents.contracts import Evidence, project
 
     now = datetime.now(UTC)
@@ -562,15 +563,22 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(planning)
         from test_roamie_planning import evidence
 
         facts[-1] = evidence().model_copy(update={"category": Specialist.TRIP, "observed_at": now})
-    called = []
+    import asyncio
 
-    def reply(request):
+    called = []
+    all_workers_started = asyncio.Event()
+
+    async def reply(request):
         body = json.loads(request.content)
         incoming = DelegatedRequest.model_validate_json(
             body["params"]["message"]["parts"][0]["text"]
         )
         kind = incoming.context.specialist
         called.append(kind)
+        if advisory_decision == "approve":
+            if len(called) == 3:
+                all_workers_started.set()
+            await asyncio.wait_for(all_workers_started.wait(), timeout=1)
         assert kind == Specialist.TRIP or not incoming.payload.request.plan_options
         if kind != Specialist.TRIP:
             assert incoming.payload.request.prompt != "Plan"
@@ -608,8 +616,22 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(planning)
             {"decision": "approve", "confidence": 1.0, "summary": "Checked", "issues": []}
         )
     )
+    rejected = ModelResponse(
+        content=json.dumps(
+            {
+                "decision": "amend",
+                "confidence": 1.0,
+                "summary": "Missing passport details",
+                "issues": [],
+            }
+        )
+    )
     model = ScriptedProvider(
-        *[approved for _ in range(6)],
+        *(
+            [approved for _ in range(6)]
+            if advisory_decision == "approve"
+            else [approved, rejected, rejected, approved]
+        ),
         capabilities=ModelCapabilities(structured_output=True, context_window_tokens=32768),
     )
     async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as http:
@@ -639,7 +661,10 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(planning)
             request=RecommendationRequest(prompt="Plan", plan_options=planning),
             facts=facts,
         )
-    assert called == list(kinds)
+    assert set(called) == (set(kinds) if advisory_decision == "approve" else {Specialist.TRIP})
+    if advisory_decision == "amend":
+        assert all(item.status == "unavailable" for item in result.advisories)
+        assert any("entry-guidance" in limitation for limitation in result.response.limitations)
     assert [item.specialist for item in result.advisories] == list(kinds[:2])
     assert "planning_checks" in "".join(
         part.text for part in model.requests[-1].messages[-1].content
@@ -659,3 +684,73 @@ def test_multi_destination_dates_stay_within_confirmed_trip():
             profile,
             RecommendationRequest(prompt="Tokyo", start_date="2026-10-04", end_date="2026-10-20"),
         )
+
+
+async def test_advisory_cannot_hide_profile_revision_change():
+    from roamie_agents.contracts import Evidence
+
+    calls = 0
+
+    def revision():
+        nonlocal calls
+        calls += 1
+        return "1" if calls == 1 else "changed"
+
+    def unexpected(request):
+        body = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "jsonrpc": "2.0",
+                "id": body["id"],
+                "result": {
+                    "status": {"state": "completed"},
+                    "artifacts": [
+                        {
+                            "parts": [
+                                {
+                                    "kind": "text",
+                                    "text": signed_reply(
+                                        request,
+                                        TravelResponse(
+                                            status="no_matches", specialist=Specialist.TRIP
+                                        ),
+                                    ),
+                                }
+                            ]
+                        }
+                    ],
+                },
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(unexpected)) as http:
+        manager = PersonalTripManager(
+            workers={
+                kind: WorkerEndpoint(
+                    name=f"roamie-{kind.value}",
+                    url=f"https://gateway.example.org/a2a/v1/roamie-{kind.value}",
+                )
+                for kind in (Specialist.TRIP, Specialist.WEATHER)
+            },
+            client=A2AWorkerClient(api_key=SecretStr("fixture"), timeout=5, client=http),
+            supervisor=reviewer(),
+            identity_key=SecretStr("a" * 32),
+            delegation_key=SecretStr("d" * 32),
+        )
+        with pytest.raises(TravelFailure, match="profile_changed"):
+            await manager.manage(
+                profile=Profile(subject="user", trip_id="trip", revision="1"),
+                current_revision=revision,
+                specialist=Specialist.TRIP,
+                request=RecommendationRequest(prompt="Plan"),
+                facts=[
+                    Evidence(
+                        id="weather",
+                        name="Weather",
+                        category=Specialist.WEATHER,
+                        source_url="https://example.org/weather",
+                        observed_at=datetime.now(UTC),
+                    )
+                ],
+            )

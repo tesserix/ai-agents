@@ -4,7 +4,7 @@ metadata:
   name: roamie-weather
   namespace: roamie
   tenantId: roamie
-  tag: 1.1.1
+  tag: 1.1.2
   visibility: public
   labels:
     app.kubernetes.io/part-of: roamie
