@@ -33,7 +33,7 @@ spec:
   runtime:
     type: container
     protocol: http
-    image: ghcr.io/tesserix/ai-agents-roamie@sha256:7deb690266a9a0e558db304966c35a56b52bc4638e010d7f2e25528a60271c6c
+    image: ghcr.io/tesserix/ai-agents-roamie@sha256:eba4d1257cc1239063ee9ebf1b0e58caf4dfad3e7e5cd2eece30066e6cf0cb96
     port: 8080
     path: /a2a/v1/roamie-routes
     healthPath: /healthz

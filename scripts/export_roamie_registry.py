@@ -44,10 +44,10 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
                 "protocol": "http",
                 "image": (
                     "ghcr.io/tesserix/ai-agents-roamie-manager@sha256:"
-                    "c2aad4bd3c8c59ad5eae1c70591ebb8bb4e9d1e83c0ab079d72b077c29025857"
+                    "fb0a043f0e6b8015f86c2bfa5b560ca4afee2dda4090f945f3411b332bbb0b00"
                     if agent.name == "roamie-trip-manager"
                     else "ghcr.io/tesserix/ai-agents-roamie@sha256:"
-                    "7deb690266a9a0e558db304966c35a56b52bc4638e010d7f2e25528a60271c6c"
+                    "eba4d1257cc1239063ee9ebf1b0e58caf4dfad3e7e5cd2eece30066e6cf0cb96"
                 ),
                 "port": 8080,
                 "path": (
