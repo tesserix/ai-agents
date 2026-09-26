@@ -198,7 +198,11 @@ class PersonalTripManager:
         if len(context.encode()) > 40000:
             raise TravelFailure("context_too_large")
         preflight = await self._supervisor.supervise(
-            task="Check this travel request against the confirmed profile constraints.",
+            task=(
+                "Check whether the proposed travel request is compatible with the confirmed "
+                "profile constraints. This is a pre-execution review, not a completed answer."
+            ),
+            stage="request",
             answer=bounded.prompt,
             context=context,
             tenant="roamie",
