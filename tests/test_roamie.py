@@ -211,6 +211,7 @@ def test_gateway_configuration_cannot_select_direct_or_other_tenant_routes(url, 
         Settings(
             api_key="a" * 32,
             mcp_schema_digest="1" * 64,
+            delegation_key="d" * 32,
             mcp_gateway_origin=url,
             mcp_gateway_path=path,
         )
@@ -224,4 +225,30 @@ async def test_worker_rejects_unknown_or_duplicate_citations():
         with pytest.raises(TravelFailure):
             await service.recommend(
                 Specialist.ACTIVITIES, RecommendationRequest(prompt="visit"), facts=[evidence()]
+            )
+
+
+def test_mcp_allows_only_the_exact_internal_gateway_over_http():
+    from roamie_agents.config import Settings
+
+    origin = "http://agentgateway-mcp.agentgateway-system.svc.cluster.local:8082"
+    settings = Settings(
+        api_key="a" * 32,
+        delegation_key="d" * 32,
+        mcp_schema_digest="1" * 64,
+        mcp_gateway_origin=origin,
+    )
+    assert settings.mcp_gateway_origin == origin
+    for invalid in (
+        origin.replace(":8082", ":8080"),
+        origin + ".evil.test",
+        origin.replace("agentgateway-mcp.", "roamie-travel-mcp."),
+        origin.replace("http://", "http://user@"),
+    ):
+        with pytest.raises(ValidationError):
+            Settings(
+                api_key="a" * 32,
+                delegation_key="d" * 32,
+                mcp_schema_digest="1" * 64,
+                mcp_gateway_origin=invalid,
             )
