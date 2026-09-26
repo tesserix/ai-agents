@@ -92,6 +92,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Read released Roamie MCP manifest
+        if: inputs.publish_roamie
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tesserix/roamie
+          ref: 0f4651ddc1d39c76cedc26512168b7b8709124d7
+          path: .roamie-release
+          persist-credentials: false
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           version: "0.12.5"
@@ -142,11 +150,11 @@ jobs:
               echo "Roamie registry deploy key is missing or malformed" >&2
               exit 1
             fi
-            set -- "$@" registry/roamie/skills/*.yaml registry/roamie/*.yaml
+            set -- "$@" registry/roamie/skills/*.yaml registry/roamie/*.yaml .roamie-release/services/travel-mcp/mcpserver.json
           fi
           for manifest in "$@"; do
             case "${manifest}" in
-              registry/roamie/*) deploy_key="${REGISTRY_ROAMIE_DEPLOY_KEY}" ;;
+              registry/roamie/*|.roamie-release/*) deploy_key="${REGISTRY_ROAMIE_DEPLOY_KEY}" ;;
               registry/sre-investigator.yaml|registry/supervisor.yaml|registry/orchestrator.yaml) deploy_key="${REGISTRY_SRE_DEPLOY_KEY}" ;;
               *) deploy_key="${REGISTRY_DEPLOY_KEY}" ;;
             esac

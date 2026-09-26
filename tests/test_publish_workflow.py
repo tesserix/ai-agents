@@ -168,3 +168,22 @@ def test_roamie_publication_has_a_separate_tenant_key_and_manual_gate():
     assert "AGENTIC_REGISTRY_ROAMIE_DEPLOY_KEY" in workflow
     assert "registry/roamie/skills/*.yaml" in workflow
     assert "inputs.publish_roamie" in workflow
+
+
+def test_roamie_mcp_publication_uses_a_pinned_release_and_scoped_identity() -> None:
+    job = yaml.safe_load(PUBLISH_WORKFLOW.read_text())["jobs"]["registry"]
+    checkout = next(
+        step for step in job["steps"] if step.get("name") == "Read released Roamie MCP manifest"
+    )
+    assert checkout["if"] == "inputs.publish_roamie"
+    assert checkout["with"]["repository"] == "tesserix/roamie"
+    assert checkout["with"]["ref"] == "0f4651ddc1d39c76cedc26512168b7b8709124d7"
+    assert checkout["with"]["persist-credentials"] is False
+    publish = next(
+        step for step in job["steps"] if step.get("name") == "Publish reviewed Agent manifests"
+    )
+    assert ".roamie-release/services/travel-mcp/mcpserver.json" in publish["run"]
+    assert (
+        'registry/roamie/*|.roamie-release/*) deploy_key="${REGISTRY_ROAMIE_DEPLOY_KEY}"'
+        in publish["run"]
+    )
