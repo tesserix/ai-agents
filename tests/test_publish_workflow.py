@@ -5,8 +5,8 @@ import yaml
 
 PUBLISH_WORKFLOW = Path(__file__).parents[1] / ".github" / "workflows" / "publish.yml"
 ADK_BASE = (
-    "ghcr.io/tesserix/base-python-adk-3.14:20260904"
-    "@sha256:4e38ff684b5c9936b855cac13aa71db619de23bca6d379d01e6156c4f402a56b"
+    "ghcr.io/tesserix/base-python-adk-3.14:20260912"
+    "@sha256:4cbbea807dc3af7664824e7e270a9618eaa49cb16806c83d58236ce3c2aba523"
 )
 
 

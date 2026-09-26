@@ -10,17 +10,17 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   quality:
-    uses: tesserix/tesserix-workflows/.github/workflows/python-baked-deps-ci.yml@8a269caaf014b3e053a29b40902484236323414a
+    uses: tesserix/tesserix-workflows/.github/workflows/python-baked-deps-ci.yml@57cebb53e06629dab4fe88268810360623a19e0f
     with:
-      container_image: ghcr.io/tesserix/base-python-adk-3.14:20260904@sha256:4e38ff684b5c9936b855cac13aa71db619de23bca6d379d01e6156c4f402a56b
+      container_image: ghcr.io/tesserix/base-python-adk-3.14:20260912@sha256:4cbbea807dc3af7664824e7e270a9618eaa49cb16806c83d58236ce3c2aba523
       uv_version: "0.12.5"
       source_directory: src
       coverage_min_lines: 90
 
   secret-scan:
-    uses: tesserix/tesserix-workflows/.github/workflows/secret-scan.yml@8a269caaf014b3e053a29b40902484236323414a
+    uses: tesserix/tesserix-workflows/.github/workflows/secret-scan.yml@57cebb53e06629dab4fe88268810360623a19e0f
