@@ -11,6 +11,22 @@ spec:
   - matches:
     - path:
         type: Exact
+        value: /a2a/v1/roamie-weather
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: roamie-agents
+  - matches:
+    - path:
+        type: Exact
+        value: /a2a/v1/roamie-entry-guidance
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: roamie-agents
+  - matches:
+    - path:
+        type: Exact
         value: /a2a/v1/roamie-currency-exchange
     backendRefs:
     - group: agentgateway.dev

@@ -100,6 +100,12 @@ class TravelService:
         by_id = {fact.id: fact for fact in eligible}
         if len(ids) != len(set(ids)) or any(key not in by_id for key in ids):
             raise TravelFailure("unsupported_citation")
+        if specialist in (Specialist.WEATHER, Specialist.ENTRY):
+            ids = list(by_id)
+        if specialist == Specialist.TRIP and any(
+            by_id[key].category in (Specialist.WEATHER, Specialist.ENTRY) for key in ids
+        ):
+            raise TravelFailure("planning_check_is_not_a_place")
         selected = [by_id[key] for key in ids]
         if request.budget_minor is not None and specialist == Specialist.TRIP:
             known_total = sum(fact.cost_minor or 0 for fact in selected)
@@ -119,12 +125,14 @@ class TravelService:
     def _eligible(
         fact: Evidence, specialist: Specialist, request: RecommendationRequest, now: datetime
     ) -> bool:
-        if not {v.casefold() for v in request.accessibility_requirements} <= {
+        planning_fact = fact.category in (Specialist.WEATHER, Specialist.ENTRY)
+        if not planning_fact and not {v.casefold() for v in request.accessibility_requirements} <= {
             v.casefold() for v in fact.accessibility_tags
         }:
             return False
         if (
-            request.start_date
+            not planning_fact
+            and request.start_date
             and request.end_date
             and (
                 fact.available_from is None
@@ -134,7 +142,12 @@ class TravelService:
             )
         ):
             return False
-        if fact.observed_at > now or now - fact.observed_at > timedelta(hours=24):
+        if fact.weather and fact.weather.local_date and request.start_date and request.end_date:
+            if not request.start_date <= fact.weather.local_date <= request.end_date:
+                return False
+        if fact.observed_at > now or now - fact.observed_at > timedelta(
+            hours=1 if specialist == Specialist.WEATHER else 24
+        ):
             return False
         if specialist != Specialist.TRIP and fact.category != specialist:
             return False

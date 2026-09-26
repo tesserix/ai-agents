@@ -15,7 +15,7 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
             "name": f"{agent.name}-agent",
             "namespace": "roamie",
             "tenantId": "roamie",
-            "tag": "1.0.5",
+            "tag": "1.0.6",
             "visibility": "public",
             "labels": {
                 "app.kubernetes.io/part-of": "roamie",
@@ -57,7 +57,7 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
                 ),
                 "healthPath": "/healthz",
             },
-            "skills": [{"ref": agent.name, "version": "1.0.5"}],
+            "skills": [{"ref": agent.name, "version": "1.0.6"}],
             "tools": [{"ref": "roamie-travel-search", "version": "1.0.1"}],
             "mcpServers": [{"ref": "roamie-travel-mcp", "version": "1.0.1"}],
         },
@@ -98,7 +98,8 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
         + manifest["spec"]["description"]
         + "\n---\n\n"
         + agent.instructions
-        + "\n\nUse only verified MCP evidence. Return through the personal trip manager.\n"
+        + "\n\nUse only manager-supplied evidence; preserve its verification status and source. "
+        "Return through the personal trip manager.\n"
     )
 
 

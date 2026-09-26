@@ -50,7 +50,18 @@ class MCPSource:
                     raise TravelFailure("schema_mismatch")
                 result = await self._session.call_tool(
                     self._tool,
-                    {"specialist": specialist.value, "request": request.model_dump(mode="json")},
+                    {
+                        "specialist": specialist.value,
+                        "request": request.model_dump(
+                            mode="json",
+                            exclude={
+                                "destination_country",
+                                "passport_country",
+                                "residence_country",
+                                "travel_purpose",
+                            },
+                        ),
+                    },
                     meta={},
                     timeout_seconds=8,
                 )
