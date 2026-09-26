@@ -4,7 +4,7 @@ metadata:
   name: roamie-routes-agent
   namespace: roamie
   tenantId: roamie
-  tag: 1.0.3
+  tag: 1.0.4
   visibility: public
   labels:
     app.kubernetes.io/part-of: roamie
@@ -33,13 +33,13 @@ spec:
   runtime:
     type: container
     protocol: http
-    image: ghcr.io/tesserix/ai-agents-roamie@sha256:4746b726f9641910db037cd98e7ae90798f431644f4054484b82f02207981f6d
+    image: ghcr.io/tesserix/ai-agents-roamie@sha256:93b17937ade18ffa74a323d908ceb022ea51c8209f3c78684264f955fcd86a3b
     port: 8080
     path: /a2a/v1/roamie-routes
     healthPath: /healthz
   skills:
   - ref: roamie-routes
-    version: 1.0.3
+    version: 1.0.4
   tools:
   - ref: roamie-travel-search
     version: 1.0.1

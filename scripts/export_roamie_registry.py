@@ -15,7 +15,7 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
             "name": f"{agent.name}-agent",
             "namespace": "roamie",
             "tenantId": "roamie",
-            "tag": "1.0.3",
+            "tag": "1.0.4",
             "visibility": "public",
             "labels": {
                 "app.kubernetes.io/part-of": "roamie",
@@ -44,10 +44,10 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
                 "protocol": "http",
                 "image": (
                     "ghcr.io/tesserix/ai-agents-roamie-manager@sha256:"
-                    "edd62baa2eeab02300e8329ae5acfc44a21a9c9e1617dfcbaa9c7b7610bebc9b"
+                    "f6ec1e250e00d8bc86bbe37d3d03c1f0e8ae9c1b9d54c97a844fc06f76b85471"
                     if agent.name == "roamie-trip-manager"
                     else "ghcr.io/tesserix/ai-agents-roamie@sha256:"
-                    "4746b726f9641910db037cd98e7ae90798f431644f4054484b82f02207981f6d"
+                    "93b17937ade18ffa74a323d908ceb022ea51c8209f3c78684264f955fcd86a3b"
                 ),
                 "port": 8080,
                 "path": (
@@ -57,7 +57,7 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
                 ),
                 "healthPath": "/healthz",
             },
-            "skills": [{"ref": agent.name, "version": "1.0.3"}],
+            "skills": [{"ref": agent.name, "version": "1.0.4"}],
             "tools": [{"ref": "roamie-travel-search", "version": "1.0.1"}],
             "mcpServers": [{"ref": "roamie-travel-mcp", "version": "1.0.1"}],
         },
