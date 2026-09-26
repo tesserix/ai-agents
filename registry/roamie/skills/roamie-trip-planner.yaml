@@ -13,7 +13,7 @@ metadata:
   annotations:
     roamie.tesserix.app/release-state: candidate
     roamie.tesserix.app/definition-revision: 0e007824e0a3
-    roamie.tesserix.app/planning-definition-revision: 7179ccef47e8
+    roamie.tesserix.app/planning-definition-revision: c9ab0fccc2a0
 spec:
   displayName: Roamie Trip Planner
   description: Select places for a feasible trip respecting dates, budget and preferences.

@@ -125,10 +125,10 @@ def planning_definition() -> AgentDefinition[PlanSelection]:
             output_type=PlanSelection,
             budget=BudgetLimits(
                 max_input_tokens=16000,
-                max_output_tokens=16000,
+                max_output_tokens=8000,
                 max_model_calls=2,
                 max_iterations=2,
-                max_seconds=65.0,
+                max_seconds=50.0,
             ),
             guardrails=("injection",),
             metadata={"capability": "json", "context_kind": "structured"},

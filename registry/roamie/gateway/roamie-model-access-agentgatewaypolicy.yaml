@@ -30,7 +30,7 @@ spec:
         matchExpressions:
         - '"roamie.models" in jwt["urn:zitadel:iam:org:project:387190457387450503:roles"]'
     timeouts:
-      request: 80s
+      request: 65s
     rateLimit:
       local:
       - requests: 120

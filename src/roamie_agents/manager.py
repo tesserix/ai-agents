@@ -92,7 +92,7 @@ class PersonalTripManager:
         exchange_quotes: list[ExchangeQuote] | None = None,
     ) -> ManagedResponse:
         try:
-            async with asyncio.timeout(145):
+            async with asyncio.timeout(78):
                 with principal_scope(
                     Principal(
                         subject=self.manager_id(profile),

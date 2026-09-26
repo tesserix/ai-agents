@@ -255,7 +255,7 @@ for route, role in [("roamie-model", "roamie.models"), ("roamie-agents", "roamie
                         ]
                     },
                 },
-                "timeouts": {"request": "80s"},
+                "timeouts": {"request": "65s"},
                 "rateLimit": {"local": [{"requests": 120, "burst": 16, "unit": "Minutes"}]},
             },
         },
