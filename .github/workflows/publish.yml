@@ -76,7 +76,7 @@ jobs:
 
   registry:
     needs: [verify, image]
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     permissions:
       contents: read
       id-token: write
@@ -97,7 +97,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tesserix/roamie
-          ref: 0f4651ddc1d39c76cedc26512168b7b8709124d7
+          ref: a0eb6de4c7f652b797c4613c331bc65b1d0ff5ff
           path: .roamie-release
           persist-credentials: false
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
@@ -150,7 +150,7 @@ jobs:
               echo "Roamie registry deploy key is missing or malformed" >&2
               exit 1
             fi
-            set -- "$@" registry/roamie/skills/*.yaml registry/roamie/*.yaml .roamie-release/services/travel-mcp/mcpserver.json
+            set -- "$@" .roamie-release/services/travel-mcp/tool.json .roamie-release/services/travel-mcp/mcpserver.json registry/roamie/skills/*.yaml registry/roamie/*.yaml
           fi
           for manifest in "$@"; do
             case "${manifest}" in

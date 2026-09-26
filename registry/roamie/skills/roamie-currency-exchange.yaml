@@ -4,7 +4,7 @@ metadata:
   name: roamie-currency-exchange
   namespace: roamie
   tenantId: roamie
-  tag: 1.0.1
+  tag: 1.0.2
   visibility: public
   labels:
     app.kubernetes.io/part-of: roamie
@@ -24,7 +24,7 @@ spec:
     among supplied candidates; do not claim internet-wide best. Return an empty list
     when no evidence supports a useful answer.
   tools:
-  - travel_search
+  - roamie-travel-search
   metadata:
     owner: roamie
     managerReviewRequired: true
