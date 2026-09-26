@@ -4,7 +4,7 @@ metadata:
   name: roamie-trip-manager-agent
   namespace: roamie
   tenantId: roamie
-  tag: 1.0.4
+  tag: 1.0.5
   visibility: public
   labels:
     app.kubernetes.io/part-of: roamie
@@ -12,11 +12,11 @@ metadata:
     agent.tesserix.app/gateway-export: 'false'
   annotations:
     roamie.tesserix.app/release-state: candidate
-    roamie.tesserix.app/definition-revision: 7dc6ac81d1b3
+    roamie.tesserix.app/definition-revision: bd107a11c1d8
     roamie.tesserix.app/signed-http-path: /v1/trip-manager
 spec:
   title: Roamie Trip Manager
-  description: Supervise the answer another AI agent produced for a task.
+  description: You are the traveller's personal trip manager and independent reviewer.
   model:
     provider: solo-agentgateway
     name: roamie-auto
@@ -25,13 +25,13 @@ spec:
   runtime:
     type: container
     protocol: http
-    image: ghcr.io/tesserix/ai-agents-roamie-manager@sha256:f6ec1e250e00d8bc86bbe37d3d03c1f0e8ae9c1b9d54c97a844fc06f76b85471
+    image: ghcr.io/tesserix/ai-agents-roamie-manager@sha256:c2aad4bd3c8c59ad5eae1c70591ebb8bb4e9d1e83c0ab079d72b077c29025857
     port: 8080
     path: /v1/trip-manager
     healthPath: /healthz
   skills:
   - ref: roamie-trip-manager
-    version: 1.0.4
+    version: 1.0.5
   tools:
   - ref: roamie-travel-search
     version: 1.0.1
