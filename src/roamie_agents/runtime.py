@@ -17,7 +17,7 @@ from roamie_agents.contracts import (
 )
 from roamie_agents.definitions import DEFINITIONS, planning_definition
 from roamie_agents.exchange import CURRENCY_EXPONENTS, ExchangeQuote, ReferenceRate, compare_quotes
-from roamie_agents.planning import PlanSelection, validate_options
+from roamie_agents.planning import PlanSelection, prepare_options, validate_options
 
 
 class TravelFailure(Exception):
@@ -91,10 +91,16 @@ class TravelService:
                 "injection": InjectionGuard(instructions=definition.agent.instructions),
             },
         )
+        source_ids = (
+            {f"p{index}": fact.id for index, fact in enumerate(eligible)} if planning else {}
+        )
         prompt = json.dumps(
             {
                 "REQUEST": request.model_dump(mode="json"),
-                "EVIDENCE": [fact.model_dump(mode="json") for fact in eligible],
+                "EVIDENCE": [
+                    {**fact.model_dump(mode="json"), "id": f"p{index}" if planning else fact.id}
+                    for index, fact in enumerate(eligible)
+                ],
             }
         )
         if len(prompt.encode()) > 48000:
@@ -114,6 +120,9 @@ class TravelService:
             "roamie_model_finished", specialist=specialist.value, run_id=run_id, state=state
         )
         if planning and state == "completed" and isinstance(output, PlanSelection):
+            output = output.model_copy(
+                update={"options": prepare_options(output.options, source_ids)}
+            )
             try:
                 validate_options(
                     output.options,

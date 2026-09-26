@@ -4,7 +4,7 @@ metadata:
   name: roamie-entry-guidance
   namespace: roamie
   tenantId: roamie
-  tag: 1.1.5
+  tag: 1.1.6
   visibility: public
   labels:
     app.kubernetes.io/part-of: roamie

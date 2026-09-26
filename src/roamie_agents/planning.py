@@ -105,3 +105,55 @@ def validate_options(
                 ):
                     raise ValueError("place_destination_mismatch")
                 finish = begin + stop.minutes + 15
+
+
+def prepare_options(
+    options: tuple[TripOption, ...], source_ids: dict[str, str]
+) -> tuple[TripOption, ...]:
+    return tuple(
+        option.model_copy(
+            update={
+                "accommodation_ids": tuple(
+                    source_ids.get(key, key) for key in option.accommodation_ids
+                ),
+                "days": tuple(
+                    day.model_copy(
+                        update={
+                            "stops": reserve_transit_time(
+                                tuple(
+                                    stop.model_copy(
+                                        update={
+                                            "evidence_id": source_ids.get(
+                                                stop.evidence_id, stop.evidence_id
+                                            )
+                                        }
+                                    )
+                                    for stop in day.stops
+                                )
+                            )
+                        }
+                    )
+                    for day in option.days
+                ),
+            }
+        )
+        for option in options
+    )
+
+
+def reserve_transit_time(stops: tuple[PlanningStop, ...]) -> tuple[PlanningStop, ...]:
+    previous_end = 0
+    scheduled_end = -15
+    scheduled = []
+    for stop in stops:
+        hour, minute = map(int, stop.time.split(":"))
+        begin = hour * 60 + minute
+        if begin < previous_end:
+            return stops
+        previous_end = begin + stop.minutes
+        shifted = max(begin, scheduled_end + 15)
+        scheduled_end = shifted + stop.minutes
+        if scheduled_end > 1440:
+            return stops
+        scheduled.append(stop.model_copy(update={"time": f"{shifted // 60:02}:{shifted % 60:02}"}))
+    return tuple(scheduled)
