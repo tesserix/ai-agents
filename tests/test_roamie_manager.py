@@ -1,0 +1,384 @@
+import json
+from datetime import UTC, datetime
+
+import httpx
+import pytest
+from pydantic import SecretStr
+from tesserix_adk.core import ModelCapabilities
+from tesserix_adk.runtime import ModelResponse
+from tesserix_adk.testing import ScriptedProvider
+
+from orchestrator_agent.config import WorkerEndpoint
+from orchestrator_agent.supervision import SupervisorService
+from orchestrator_agent.workers import A2AWorkerClient
+from roamie_agents.contracts import RecommendationRequest, Specialist, TravelResponse
+from roamie_agents.manager import PersonalTripManager, Profile
+from roamie_agents.runtime import TravelFailure
+
+
+def reviewer(decision="approve"):
+    response = json.dumps(
+        {
+            "decision": decision,
+            "confidence": 1.0,
+            "summary": "Checked profile and evidence",
+            "issues": [],
+        }
+    )
+    return SupervisorService(
+        provider=ScriptedProvider(
+            ModelResponse(content=response),
+            ModelResponse(content=response),
+            capabilities=ModelCapabilities(structured_output=True, context_window_tokens=32768),
+        )
+    )
+
+
+async def test_manager_checks_request_and_response_and_scopes_identity():
+    calls = []
+
+    def reply(request):
+        calls.append(json.loads(request.content))
+        output = TravelResponse(status="no_matches", specialist=Specialist.FOOD)
+        return httpx.Response(
+            200,
+            json={
+                "jsonrpc": "2.0",
+                "id": calls[-1]["id"],
+                "result": {
+                    "status": {"state": "completed"},
+                    "artifacts": [{"parts": [{"kind": "text", "text": output.model_dump_json()}]}],
+                },
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as client:
+        worker = A2AWorkerClient(api_key=SecretStr("fixture-worker-key"), timeout=5, client=client)
+        manager = PersonalTripManager(
+            workers={
+                Specialist.FOOD: WorkerEndpoint(
+                    name="roamie-food", url="https://gateway.example.org/a2a/v1/roamie-food"
+                )
+            },
+            client=worker,
+            supervisor=reviewer(),
+            identity_key=SecretStr("a" * 32),
+        )
+        profile = Profile(subject="user-1", trip_id="trip-1", revision="1", allergies=("peanut",))
+        result = await manager.manage(
+            profile=profile,
+            current_revision=lambda: "1",
+            specialist=Specialist.FOOD,
+            request=RecommendationRequest(prompt="Dinner"),
+            facts=[],
+        )
+        assert result.response.status == "no_matches"
+        assert len(result.review_run_ids) == 2
+        assert result.manager_id.startswith("trip-manager-")
+        prompt = calls[0]["params"]["message"]["parts"][0]["text"]
+        assert "peanut" in prompt
+        assert "user-1" not in prompt
+
+
+async def test_rejected_preflight_never_calls_worker():
+    def refuse_call(request):
+        raise AssertionError("worker must not be called")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(refuse_call)) as client:
+        manager = PersonalTripManager(
+            workers={
+                Specialist.FOOD: WorkerEndpoint(
+                    name="roamie-food", url="https://gateway.example.org/a2a/v1/roamie-food"
+                )
+            },
+            client=A2AWorkerClient(api_key=SecretStr("fixture"), timeout=5, client=client),
+            supervisor=reviewer("reject"),
+            identity_key=SecretStr("a" * 32),
+        )
+        with pytest.raises(TravelFailure, match="request_requires_clarification"):
+            await manager.manage(
+                profile=Profile(subject="user", trip_id="trip", revision="1"),
+                current_revision=lambda: "1",
+                specialist=Specialist.FOOD,
+                request=RecommendationRequest(prompt="Dinner"),
+                facts=[],
+            )
+
+
+async def test_changed_profile_never_calls_worker():
+    async with httpx.AsyncClient() as client:
+        manager = PersonalTripManager(
+            workers={
+                Specialist.FOOD: WorkerEndpoint(
+                    name="roamie-food", url="https://gateway.example.org/a2a/v1/roamie-food"
+                )
+            },
+            client=A2AWorkerClient(api_key=SecretStr("fixture"), timeout=5, client=client),
+            supervisor=reviewer(),
+            identity_key=SecretStr("a" * 32),
+        )
+        with pytest.raises(TravelFailure, match="profile_changed"):
+            await manager.manage(
+                profile=Profile(subject="user", trip_id="trip", revision="1"),
+                current_revision=lambda: "2",
+                specialist=Specialist.FOOD,
+                request=RecommendationRequest(prompt="Dinner"),
+                facts=[],
+            )
+
+
+@pytest.mark.parametrize(
+    "output,expected",
+    [
+        ({"status": "no_matches", "specialist": "shopping"}, "wrong_specialist"),
+        (
+            {
+                "status": "ok",
+                "specialist": "food",
+                "recommendations": [
+                    {
+                        "id": "invented",
+                        "name": "Invented",
+                        "category": "food",
+                        "source_url": "https://example.org/place",
+                        "observed_at": "2026-09-26T00:00:00Z",
+                    }
+                ],
+            },
+            "unsupported_worker_claim",
+        ),
+    ],
+)
+async def test_manager_blocks_worker_claims_missing_from_independent_evidence(output, expected):
+    def reply(request):
+        return httpx.Response(
+            200,
+            json={
+                "result": {
+                    "status": {"state": "completed"},
+                    "artifacts": [{"parts": [{"kind": "text", "text": json.dumps(output)}]}],
+                }
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as client:
+        manager = PersonalTripManager(
+            workers={
+                Specialist.FOOD: WorkerEndpoint(
+                    name="roamie-food", url="https://gateway.example.org/a2a/v1/roamie-food"
+                )
+            },
+            client=A2AWorkerClient(api_key=SecretStr("fixture"), timeout=5, client=client),
+            supervisor=reviewer(),
+            identity_key=SecretStr("a" * 32),
+        )
+        with pytest.raises(TravelFailure, match=expected):
+            await manager.manage(
+                profile=Profile(subject="user", trip_id="trip", revision="1"),
+                current_revision=lambda: "1",
+                specialist=Specialist.FOOD,
+                request=RecommendationRequest(prompt="Dinner"),
+                facts=[],
+            )
+
+
+async def test_manager_calls_real_worker_asgi_over_a2a_and_reviews_result():
+    from roamie_agents.api import create_app
+    from roamie_agents.config import Settings
+    from roamie_agents.contracts import Evidence
+    from roamie_agents.runtime import TravelService
+
+    now = datetime(2026, 9, 26, 1, tzinfo=UTC)
+    model = ScriptedProvider(
+        ModelResponse(content='{"selected_ids":["cafe"]}'),
+        capabilities=ModelCapabilities(structured_output=True, context_window_tokens=32768),
+    )
+
+    app = create_app(
+        settings=Settings(api_key="a" * 32, gateway_api_key="b" * 32, mcp_schema_digest="1" * 64),
+        service=TravelService(provider=model, clock=lambda: now),
+    )
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app)) as client:
+        manager = PersonalTripManager(
+            workers={
+                Specialist.FOOD: WorkerEndpoint(
+                    name="roamie-food", url="https://gateway.example.org/a2a/v1/roamie-food"
+                )
+            },
+            client=A2AWorkerClient(api_key=SecretStr("a" * 32), timeout=5, client=client),
+            supervisor=reviewer(),
+            identity_key=SecretStr("c" * 32),
+            clock=lambda: now,
+        )
+        result = await manager.manage(
+            profile=Profile(subject="user", trip_id="trip", revision="1", diets=("vegan",)),
+            current_revision=lambda: "1",
+            specialist=Specialist.FOOD,
+            request=RecommendationRequest(prompt="Dinner"),
+            facts=[
+                Evidence(
+                    id="cafe",
+                    name="Cafe",
+                    category=Specialist.FOOD,
+                    source_url="https://example.org/cafe",
+                    observed_at=now,
+                    dietary_tags=("vegan",),
+                    cost_minor=2000,
+                    currency="AUD",
+                )
+            ],
+        )
+        assert result.response.recommendations[0].cost_minor == 2000
+        assert result.response.recommendations[0].warnings == (
+            "Confirm dietary and allergy requirements with staff.",
+        )
+        assert len(result.review_run_ids) == 2
+
+
+async def test_evidence_expiring_during_review_is_rejected():
+    from datetime import timedelta
+
+    from roamie_agents.contracts import Evidence, project
+
+    now = datetime.now(UTC)
+    time_values = iter([now, now + timedelta(days=2)])
+    facts = [
+        Evidence(
+            id="a", name="Place", category="food", source_url="https://x.test/a", observed_at=now
+        )
+    ]
+    request = RecommendationRequest(prompt="dinner")
+    answer = TravelResponse(
+        specialist="food", status="ok", recommendations=[project(facts[0], None)]
+    )
+
+    def handler(req):
+        incoming = json.loads(req.content)
+        return httpx.Response(
+            200,
+            json={
+                "jsonrpc": "2.0",
+                "id": incoming["id"],
+                "result": {
+                    "id": "task",
+                    "contextId": "context",
+                    "status": {"state": "completed"},
+                    "artifacts": [
+                        {
+                            "artifactId": "a",
+                            "parts": [{"kind": "text", "text": answer.model_dump_json()}],
+                        }
+                    ],
+                },
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        manager = PersonalTripManager(
+            workers={
+                Specialist.FOOD: WorkerEndpoint(name="food", url="https://gateway.test/a2a/v1/food")
+            },
+            client=A2AWorkerClient(api_key=SecretStr("key"), timeout=3, client=http),
+            supervisor=reviewer(),
+            identity_key=SecretStr("x" * 32),
+            clock=lambda: next(time_values),
+        )
+        with pytest.raises(TravelFailure, match="evidence_expired"):
+            await manager.manage(
+                specialist=Specialist.FOOD,
+                profile=Profile(subject="user", trip_id="trip", revision="1"),
+                request=request,
+                facts=facts,
+                current_revision=lambda: "1",
+            )
+
+
+@pytest.mark.parametrize("tampered", [False, True])
+async def test_manager_recomputes_currency_exchange_receipts(tampered):
+    from datetime import timedelta
+
+    from roamie_agents.exchange import ExchangeQuote, ReferenceRate, compare_quotes
+
+    now = datetime(2026, 9, 26, 1, tzinfo=UTC)
+    reference = ReferenceRate(
+        source_currency="AUD",
+        destination_currency="JPY",
+        rate="101",
+        observed_at=now,
+        source_url="https://example.org/reference",
+    )
+    quotes = [
+        ExchangeQuote(
+            id="shop",
+            shop="Exchange shop",
+            source_currency="AUD",
+            destination_currency="JPY",
+            rate="100",
+            observed_at=now,
+            expires_at=now + timedelta(hours=1),
+            source_url="https://example.org/shop",
+            fees_complete=True,
+        )
+    ]
+    comparisons = compare_quotes(
+        amount_minor=10000,
+        source_exponent=2,
+        destination_exponent=0,
+        reference=reference,
+        quotes=quotes,
+        now=now,
+    )
+    if tampered:
+        comparisons = (comparisons[0].model_copy(update={"received_minor": 999999}),)
+    response = TravelResponse(
+        status="ok", specialist=Specialist.EXCHANGE, exchange_comparisons=comparisons
+    )
+
+    def reply(request):
+        incoming = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "jsonrpc": "2.0",
+                "id": incoming["id"],
+                "result": {
+                    "status": {"state": "completed"},
+                    "artifacts": [
+                        {"parts": [{"kind": "text", "text": response.model_dump_json()}]}
+                    ],
+                },
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as client:
+        manager = PersonalTripManager(
+            workers={
+                Specialist.EXCHANGE: WorkerEndpoint(
+                    name="exchange", url="https://gateway.example.org/a2a/v1/exchange"
+                )
+            },
+            client=A2AWorkerClient(api_key=SecretStr("fixture"), timeout=5, client=client),
+            supervisor=reviewer(),
+            identity_key=SecretStr("x" * 32),
+            clock=lambda: now,
+        )
+        arguments = dict(
+            profile=Profile(subject="user", trip_id="trip", revision="1"),
+            current_revision=lambda: "1",
+            specialist=Specialist.EXCHANGE,
+            request=RecommendationRequest(
+                prompt="Exchange money",
+                exchange_amount_minor=10000,
+                exchange_destination_currency="JPY",
+            ),
+            facts=[],
+            reference_rate=reference,
+            exchange_quotes=quotes,
+        )
+        if tampered:
+            with pytest.raises(TravelFailure, match="unsupported_worker_claim"):
+                await manager.manage(**arguments)
+        else:
+            result = await manager.manage(**arguments)
+            assert result.response.exchange_comparisons[0].received_minor == 10000
+            assert len(result.review_run_ids) == 2

@@ -132,6 +132,8 @@ def test_kora_and_sre_publish_as_distinct_runtime_images() -> None:
     job = yaml.safe_load(PUBLISH_WORKFLOW.read_text())["jobs"]["image"]
 
     assert job["strategy"]["matrix"]["include"] == [
+        {"target": "roamie-manager-runtime", "image": "ghcr.io/tesserix/ai-agents-roamie-manager"},
+        {"target": "roamie-runtime", "image": "ghcr.io/tesserix/ai-agents-roamie"},
         {"target": "kora-runtime", "image": "ghcr.io/tesserix/ai-agents"},
         {"target": "sre-runtime", "image": "ghcr.io/tesserix/ai-agents-sre"},
         {"target": "orchestrator-runtime", "image": "ghcr.io/tesserix/ai-agents-orchestrator"},
@@ -159,3 +161,10 @@ def test_sre_publication_uses_a_separate_tenant_scoped_deploy_key() -> None:
         ' deploy_key="${REGISTRY_SRE_DEPLOY_KEY}"' in script
     )
     assert "X-Agentic-Registry-Deploy-Key: ${deploy_key}" in script
+
+
+def test_roamie_publication_has_a_separate_tenant_key_and_manual_gate():
+    workflow = PUBLISH_WORKFLOW.read_text()
+    assert "AGENTIC_REGISTRY_ROAMIE_DEPLOY_KEY" in workflow
+    assert "registry/roamie/skills/*.yaml" in workflow
+    assert "inputs.publish_roamie" in workflow

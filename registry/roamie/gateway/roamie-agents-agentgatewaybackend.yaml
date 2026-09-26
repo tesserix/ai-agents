@@ -1,0 +1,9 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: roamie-agents
+  namespace: agentgateway-system
+spec:
+  a2a:
+    host: roamie-agents.roamie.svc.cluster.local
+    port: 8080

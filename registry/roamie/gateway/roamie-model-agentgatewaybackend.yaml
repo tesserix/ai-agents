@@ -1,0 +1,22 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: roamie-model
+  namespace: agentgateway-system
+spec:
+  ai:
+    groups:
+    - providers:
+      - name: vertex
+        vertexai:
+          model: gemini-3.5-flash
+          projectId: tesseracthub-480811
+          region: global
+        policies:
+          auth:
+            gcp: {}
+          tls: {}
+  policies:
+    ai:
+      routes:
+        /v1/chat/completions: Completions

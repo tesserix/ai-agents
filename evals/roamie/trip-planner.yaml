@@ -1,0 +1,20 @@
+clock: '2026-09-26T01:00:00Z'
+specialist: trip-planner
+cases:
+- id: sourced-selection
+  request: &id001
+    prompt: Recommend one sourced option
+  facts:
+  - id: verified-1
+    name: Verified provider result
+    category: trip-planner
+    source_url: https://example.org/source
+    observed_at: '2026-09-26T00:00:00Z'
+  selection:
+  - verified-1
+  expected_status: ok
+- id: no-evidence
+  request: *id001
+  facts: []
+  selection: []
+  expected_status: no_matches

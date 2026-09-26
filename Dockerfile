@@ -43,5 +43,12 @@ FROM runtime-base AS orchestrator-runtime
 
 ENTRYPOINT ["uvicorn", "orchestrator_agent.main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
 
+
+FROM runtime-base AS roamie-runtime
+ENTRYPOINT ["uvicorn", "roamie_agents.main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
+
+FROM runtime-base AS roamie-manager-runtime
+ENTRYPOINT ["uvicorn", "roamie_agents.manager_main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
+
 # Preserve the repository's original default for local `docker build` callers.
 FROM kora-runtime AS runtime

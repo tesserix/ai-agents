@@ -2,6 +2,11 @@ name: Publish
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_roamie:
+        type: boolean
+        default: false
+        description: Publish reviewed Roamie agents and skills
   pull_request:
   push:
     branches: [main]
@@ -16,13 +21,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+
   image:
+    needs: verify
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         include:
+          - target: roamie-manager-runtime
+            image: ghcr.io/tesserix/ai-agents-roamie-manager
+          - target: roamie-runtime
+            image: ghcr.io/tesserix/ai-agents-roamie
           - target: kora-runtime
             image: ghcr.io/tesserix/ai-agents
           - target: sre-runtime
@@ -62,6 +75,7 @@ jobs:
           sbom: true
 
   registry:
+    needs: [verify, image]
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -89,6 +103,8 @@ jobs:
       - name: Publish reviewed Agent manifests
         env:
           REGISTRY_DEPLOY_KEY: ${{ secrets.AGENTIC_REGISTRY_DEPLOY_KEY }}
+          PUBLISH_ROAMIE: ${{ inputs.publish_roamie }}
+          REGISTRY_ROAMIE_DEPLOY_KEY: ${{ secrets.AGENTIC_REGISTRY_ROAMIE_DEPLOY_KEY }}
           REGISTRY_SRE_DEPLOY_KEY: ${{ secrets.AGENTIC_REGISTRY_SRE_DEPLOY_KEY }}
           REGISTRY_PUBLISH_URL: https://publish-aregistry.tesserix.app/v0/apply
         run: |
@@ -120,8 +136,17 @@ jobs:
             python -c 'import json, sys; print(json.load(sys.stdin)["value"])')
           response_file=$(mktemp)
           trap 'unset github_oidc_token oidc_response; rm -f "${response_file}"' EXIT
-          for manifest in registry/*.yaml; do
+          set -- registry/*.yaml
+          if [ "${PUBLISH_ROAMIE}" = "true" ]; then
+            if ! valid_deploy_key "${REGISTRY_ROAMIE_DEPLOY_KEY}"; then
+              echo "Roamie registry deploy key is missing or malformed" >&2
+              exit 1
+            fi
+            set -- "$@" registry/roamie/skills/*.yaml registry/roamie/*.yaml
+          fi
+          for manifest in "$@"; do
             case "${manifest}" in
+              registry/roamie/*) deploy_key="${REGISTRY_ROAMIE_DEPLOY_KEY}" ;;
               registry/sre-investigator.yaml|registry/supervisor.yaml|registry/orchestrator.yaml) deploy_key="${REGISTRY_SRE_DEPLOY_KEY}" ;;
               *) deploy_key="${REGISTRY_DEPLOY_KEY}" ;;
             esac

@@ -1,0 +1,1474 @@
+{
+  "input": {
+    "$defs": {
+      "Location": {
+        "additionalProperties": false,
+        "properties": {
+          "latitude": {
+            "maximum": 90,
+            "minimum": -90,
+            "title": "Latitude",
+            "type": "number"
+          },
+          "longitude": {
+            "maximum": 180,
+            "minimum": -180,
+            "title": "Longitude",
+            "type": "number"
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude"
+        ],
+        "title": "Location",
+        "type": "object"
+      },
+      "RecommendationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "accessibility_requirements": {
+            "default": [],
+            "items": {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            "maxItems": 12,
+            "title": "Accessibility Requirements",
+            "type": "array"
+          },
+          "allergies": {
+            "default": [],
+            "items": {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Allergies",
+            "type": "array"
+          },
+          "budget_minor": {
+            "anyOf": [
+              {
+                "maximum": 1000000000000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Budget Minor"
+          },
+          "categories": {
+            "default": [],
+            "items": {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            "maxItems": 12,
+            "title": "Categories",
+            "type": "array"
+          },
+          "currency": {
+            "default": "AUD",
+            "maxLength": 2048,
+            "title": "Currency",
+            "type": "string"
+          },
+          "destination": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Destination",
+            "type": "string"
+          },
+          "diets": {
+            "default": [],
+            "items": {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            "maxItems": 12,
+            "title": "Diets",
+            "type": "array"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "End Date"
+          },
+          "exchange_amount_minor": {
+            "anyOf": [
+              {
+                "maximum": 1000000000000,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Exchange Amount Minor"
+          },
+          "exchange_destination_currency": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Exchange Destination Currency"
+          },
+          "language": {
+            "default": "en",
+            "maxLength": 35,
+            "minLength": 2,
+            "title": "Language",
+            "type": "string"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Location"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "photo_consent": {
+            "default": false,
+            "title": "Photo Consent",
+            "type": "boolean"
+          },
+          "photo_ids": {
+            "default": [],
+            "items": {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            "maxItems": 15,
+            "title": "Photo Ids",
+            "type": "array"
+          },
+          "preferences": {
+            "default": [],
+            "items": {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Preferences",
+            "type": "array"
+          },
+          "prompt": {
+            "maxLength": 6000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Start Date"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "title": "RecommendationRequest",
+        "type": "object"
+      },
+      "Specialist": {
+        "enum": [
+          "trip-planner",
+          "food",
+          "routes",
+          "activities",
+          "shopping",
+          "memories",
+          "currency-exchange"
+        ],
+        "title": "Specialist",
+        "type": "string"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "request": {
+        "$ref": "#/$defs/RecommendationRequest"
+      },
+      "specialist": {
+        "$ref": "#/$defs/Specialist"
+      }
+    },
+    "required": [
+      "specialist",
+      "request"
+    ],
+    "title": "Search",
+    "type": "object"
+  },
+  "output": {
+    "$defs": {
+      "Evidence": {
+        "additionalProperties": false,
+        "properties": {
+          "accessibility_tags": {
+            "default": [],
+            "items": {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            "maxItems": 12,
+            "title": "Accessibility Tags",
+            "type": "array"
+          },
+          "allergen_disclosure_complete": {
+            "default": false,
+            "title": "Allergen Disclosure Complete",
+            "type": "boolean"
+          },
+          "allergens": {
+            "default": [],
+            "items": {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Allergens",
+            "type": "array"
+          },
+          "available_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Available From"
+          },
+          "available_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Available Until"
+          },
+          "category": {
+            "$ref": "#/$defs/Specialist"
+          },
+          "cost_minor": {
+            "anyOf": [
+              {
+                "maximum": 1000000000000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cost Minor"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Currency"
+          },
+          "dietary_tags": {
+            "default": [],
+            "items": {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Dietary Tags",
+            "type": "array"
+          },
+          "discount_percent": {
+            "anyOf": [
+              {
+                "maximum": 100,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Discount Percent"
+          },
+          "distance_metres": {
+            "anyOf": [
+              {
+                "maximum": 1000000000000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Distance Metres"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "maximum": 1000000000000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Duration Seconds"
+          },
+          "id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Location"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "mode": {
+            "default": "walking",
+            "enum": [
+              "walking",
+              "driving",
+              "transit",
+              "bicycling"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "maxLength": 2048,
+            "title": "Observed At",
+            "type": "string"
+          },
+          "offer_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Offer Expires At"
+          },
+          "photo_id": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Photo Id"
+          },
+          "price_is_estimate": {
+            "default": true,
+            "title": "Price Is Estimate",
+            "type": "boolean"
+          },
+          "source_url": {
+            "format": "uri",
+            "maxLength": 2083,
+            "minLength": 1,
+            "title": "Source Url",
+            "type": "string"
+          },
+          "synthetic": {
+            "default": false,
+            "title": "Synthetic",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "category",
+          "source_url",
+          "observed_at"
+        ],
+        "title": "Evidence",
+        "type": "object"
+      },
+      "ExchangeQuote": {
+        "additionalProperties": false,
+        "properties": {
+          "cash_increment_minor": {
+            "default": 1,
+            "maximum": 10000,
+            "minimum": 1,
+            "title": "Cash Increment Minor",
+            "type": "integer"
+          },
+          "destination_currency": {
+            "maxLength": 2048,
+            "title": "Destination Currency",
+            "type": "string"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "maximum": 86400,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Duration Seconds"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "maxLength": 2048,
+            "title": "Expires At",
+            "type": "string"
+          },
+          "fee_basis_points": {
+            "default": 0,
+            "maximum": 10000,
+            "minimum": 0,
+            "title": "Fee Basis Points",
+            "type": "integer"
+          },
+          "fees_complete": {
+            "title": "Fees Complete",
+            "type": "boolean"
+          },
+          "fixed_destination_fee_minor": {
+            "default": 0,
+            "maximum": 1000000000000,
+            "minimum": 0,
+            "title": "Fixed Destination Fee Minor",
+            "type": "integer"
+          },
+          "fixed_source_fee_minor": {
+            "default": 0,
+            "maximum": 1000000000000,
+            "minimum": 0,
+            "title": "Fixed Source Fee Minor",
+            "type": "integer"
+          },
+          "id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Location"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "maximum_amount_minor": {
+            "default": 1000000000000,
+            "maximum": 1000000000000,
+            "minimum": 1,
+            "title": "Maximum Amount Minor",
+            "type": "integer"
+          },
+          "minimum_amount_minor": {
+            "default": 1,
+            "maximum": 1000000000000,
+            "minimum": 1,
+            "title": "Minimum Amount Minor",
+            "type": "integer"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "maxLength": 2048,
+            "title": "Observed At",
+            "type": "string"
+          },
+          "rate": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1000000000.0,
+                "type": "number"
+              },
+              {
+                "maxLength": 2048,
+                "type": "string"
+              }
+            ],
+            "title": "Rate"
+          },
+          "shop": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Shop",
+            "type": "string"
+          },
+          "source_currency": {
+            "maxLength": 2048,
+            "title": "Source Currency",
+            "type": "string"
+          },
+          "source_url": {
+            "format": "uri",
+            "maxLength": 2083,
+            "minLength": 1,
+            "title": "Source Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_currency",
+          "destination_currency",
+          "rate",
+          "observed_at",
+          "source_url",
+          "id",
+          "shop",
+          "expires_at",
+          "fees_complete"
+        ],
+        "title": "ExchangeQuote",
+        "type": "object"
+      },
+      "Location": {
+        "additionalProperties": false,
+        "properties": {
+          "latitude": {
+            "maximum": 90,
+            "minimum": -90,
+            "title": "Latitude",
+            "type": "number"
+          },
+          "longitude": {
+            "maximum": 180,
+            "minimum": -180,
+            "title": "Longitude",
+            "type": "number"
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude"
+        ],
+        "title": "Location",
+        "type": "object"
+      },
+      "ReferenceRate": {
+        "additionalProperties": false,
+        "properties": {
+          "destination_currency": {
+            "maxLength": 2048,
+            "title": "Destination Currency",
+            "type": "string"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "maxLength": 2048,
+            "title": "Observed At",
+            "type": "string"
+          },
+          "rate": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1000000000.0,
+                "type": "number"
+              },
+              {
+                "maxLength": 2048,
+                "type": "string"
+              }
+            ],
+            "title": "Rate"
+          },
+          "source_currency": {
+            "maxLength": 2048,
+            "title": "Source Currency",
+            "type": "string"
+          },
+          "source_url": {
+            "format": "uri",
+            "maxLength": 2083,
+            "minLength": 1,
+            "title": "Source Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_currency",
+          "destination_currency",
+          "rate",
+          "observed_at",
+          "source_url"
+        ],
+        "title": "ReferenceRate",
+        "type": "object"
+      },
+      "Specialist": {
+        "enum": [
+          "trip-planner",
+          "food",
+          "routes",
+          "activities",
+          "shopping",
+          "memories",
+          "currency-exchange"
+        ],
+        "title": "Specialist",
+        "type": "string"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "exchange_quotes": {
+        "items": {
+          "$ref": "#/$defs/ExchangeQuote"
+        },
+        "maxItems": 40,
+        "title": "Exchange Quotes",
+        "type": "array"
+      },
+      "facts": {
+        "items": {
+          "$ref": "#/$defs/Evidence"
+        },
+        "maxItems": 40,
+        "title": "Facts",
+        "type": "array"
+      },
+      "reference_rate": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ReferenceRate"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "status": {
+        "enum": [
+          "ok",
+          "unavailable"
+        ],
+        "title": "Status",
+        "type": "string"
+      }
+    },
+    "required": [
+      "status"
+    ],
+    "title": "EvidenceBatch",
+    "type": "object"
+  },
+  "validation": {
+    "input": {
+      "$defs": {
+        "Location": {
+          "additionalProperties": false,
+          "properties": {
+            "latitude": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Latitude",
+              "type": "number"
+            },
+            "longitude": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Longitude",
+              "type": "number"
+            }
+          },
+          "required": [
+            "latitude",
+            "longitude"
+          ],
+          "title": "Location",
+          "type": "object"
+        },
+        "RecommendationRequest": {
+          "additionalProperties": false,
+          "properties": {
+            "accessibility_requirements": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 12,
+              "title": "Accessibility Requirements",
+              "type": "array"
+            },
+            "allergies": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 20,
+              "title": "Allergies",
+              "type": "array"
+            },
+            "budget_minor": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Budget Minor"
+            },
+            "categories": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 12,
+              "title": "Categories",
+              "type": "array"
+            },
+            "currency": {
+              "default": "AUD",
+              "pattern": "^[A-Z]{3}$",
+              "title": "Currency",
+              "type": "string"
+            },
+            "destination": {
+              "default": "",
+              "maxLength": 200,
+              "title": "Destination",
+              "type": "string"
+            },
+            "diets": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 12,
+              "title": "Diets",
+              "type": "array"
+            },
+            "end_date": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "End Date"
+            },
+            "exchange_amount_minor": {
+              "anyOf": [
+                {
+                  "maximum": 1000000000000,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Exchange Amount Minor"
+            },
+            "exchange_destination_currency": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Z]{3}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Exchange Destination Currency"
+            },
+            "language": {
+              "default": "en",
+              "maxLength": 35,
+              "minLength": 2,
+              "title": "Language",
+              "type": "string"
+            },
+            "origin": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Location"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "photo_consent": {
+              "default": false,
+              "title": "Photo Consent",
+              "type": "boolean"
+            },
+            "photo_ids": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 15,
+              "title": "Photo Ids",
+              "type": "array"
+            },
+            "preferences": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 20,
+              "title": "Preferences",
+              "type": "array"
+            },
+            "prompt": {
+              "maxLength": 6000,
+              "minLength": 1,
+              "title": "Prompt",
+              "type": "string"
+            },
+            "start_date": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Start Date"
+            }
+          },
+          "required": [
+            "prompt"
+          ],
+          "title": "RecommendationRequest",
+          "type": "object"
+        },
+        "Specialist": {
+          "enum": [
+            "trip-planner",
+            "food",
+            "routes",
+            "activities",
+            "shopping",
+            "memories",
+            "currency-exchange"
+          ],
+          "title": "Specialist",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/RecommendationRequest"
+        },
+        "specialist": {
+          "$ref": "#/$defs/Specialist"
+        }
+      },
+      "required": [
+        "specialist",
+        "request"
+      ],
+      "title": "Search",
+      "type": "object"
+    },
+    "output": {
+      "$defs": {
+        "Evidence": {
+          "additionalProperties": false,
+          "properties": {
+            "accessibility_tags": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 12,
+              "title": "Accessibility Tags",
+              "type": "array"
+            },
+            "allergen_disclosure_complete": {
+              "default": false,
+              "title": "Allergen Disclosure Complete",
+              "type": "boolean"
+            },
+            "allergens": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 20,
+              "title": "Allergens",
+              "type": "array"
+            },
+            "available_from": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Available From"
+            },
+            "available_until": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Available Until"
+            },
+            "category": {
+              "$ref": "#/$defs/Specialist"
+            },
+            "cost_minor": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cost Minor"
+            },
+            "currency": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Z]{3}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Currency"
+            },
+            "dietary_tags": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 20,
+              "title": "Dietary Tags",
+              "type": "array"
+            },
+            "discount_percent": {
+              "anyOf": [
+                {
+                  "maximum": 100,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Discount Percent"
+            },
+            "distance_metres": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Distance Metres"
+            },
+            "duration_seconds": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Duration Seconds"
+            },
+            "id": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Id",
+              "type": "string"
+            },
+            "location": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Location"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "mode": {
+              "default": "walking",
+              "enum": [
+                "walking",
+                "driving",
+                "transit",
+                "bicycling"
+              ],
+              "title": "Mode",
+              "type": "string"
+            },
+            "name": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            },
+            "observed_at": {
+              "format": "date-time",
+              "title": "Observed At",
+              "type": "string"
+            },
+            "offer_expires_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Offer Expires At"
+            },
+            "photo_id": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Photo Id"
+            },
+            "price_is_estimate": {
+              "default": true,
+              "title": "Price Is Estimate",
+              "type": "boolean"
+            },
+            "source_url": {
+              "format": "uri",
+              "maxLength": 2083,
+              "minLength": 1,
+              "title": "Source Url",
+              "type": "string"
+            },
+            "synthetic": {
+              "default": false,
+              "title": "Synthetic",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "category",
+            "source_url",
+            "observed_at"
+          ],
+          "title": "Evidence",
+          "type": "object"
+        },
+        "ExchangeQuote": {
+          "additionalProperties": false,
+          "properties": {
+            "cash_increment_minor": {
+              "default": 1,
+              "maximum": 10000,
+              "minimum": 1,
+              "title": "Cash Increment Minor",
+              "type": "integer"
+            },
+            "destination_currency": {
+              "pattern": "^[A-Z]{3}$",
+              "title": "Destination Currency",
+              "type": "string"
+            },
+            "duration_seconds": {
+              "anyOf": [
+                {
+                  "maximum": 86400,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Duration Seconds"
+            },
+            "expires_at": {
+              "format": "date-time",
+              "title": "Expires At",
+              "type": "string"
+            },
+            "fee_basis_points": {
+              "default": 0,
+              "maximum": 10000,
+              "minimum": 0,
+              "title": "Fee Basis Points",
+              "type": "integer"
+            },
+            "fees_complete": {
+              "title": "Fees Complete",
+              "type": "boolean"
+            },
+            "fixed_destination_fee_minor": {
+              "default": 0,
+              "maximum": 1000000000000,
+              "minimum": 0,
+              "title": "Fixed Destination Fee Minor",
+              "type": "integer"
+            },
+            "fixed_source_fee_minor": {
+              "default": 0,
+              "maximum": 1000000000000,
+              "minimum": 0,
+              "title": "Fixed Source Fee Minor",
+              "type": "integer"
+            },
+            "id": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Id",
+              "type": "string"
+            },
+            "location": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Location"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "maximum_amount_minor": {
+              "default": 1000000000000,
+              "maximum": 1000000000000,
+              "minimum": 1,
+              "title": "Maximum Amount Minor",
+              "type": "integer"
+            },
+            "minimum_amount_minor": {
+              "default": 1,
+              "maximum": 1000000000000,
+              "minimum": 1,
+              "title": "Minimum Amount Minor",
+              "type": "integer"
+            },
+            "observed_at": {
+              "format": "date-time",
+              "title": "Observed At",
+              "type": "string"
+            },
+            "rate": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0.0,
+                  "maximum": 1000000000.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,25}0*$)\\d{0,12}\\.\\d{0,12}0*$)",
+                  "type": "string"
+                }
+              ],
+              "title": "Rate"
+            },
+            "shop": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Shop",
+              "type": "string"
+            },
+            "source_currency": {
+              "pattern": "^[A-Z]{3}$",
+              "title": "Source Currency",
+              "type": "string"
+            },
+            "source_url": {
+              "format": "uri",
+              "maxLength": 2083,
+              "minLength": 1,
+              "title": "Source Url",
+              "type": "string"
+            }
+          },
+          "required": [
+            "source_currency",
+            "destination_currency",
+            "rate",
+            "observed_at",
+            "source_url",
+            "id",
+            "shop",
+            "expires_at",
+            "fees_complete"
+          ],
+          "title": "ExchangeQuote",
+          "type": "object"
+        },
+        "Location": {
+          "additionalProperties": false,
+          "properties": {
+            "latitude": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Latitude",
+              "type": "number"
+            },
+            "longitude": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Longitude",
+              "type": "number"
+            }
+          },
+          "required": [
+            "latitude",
+            "longitude"
+          ],
+          "title": "Location",
+          "type": "object"
+        },
+        "ReferenceRate": {
+          "additionalProperties": false,
+          "properties": {
+            "destination_currency": {
+              "pattern": "^[A-Z]{3}$",
+              "title": "Destination Currency",
+              "type": "string"
+            },
+            "observed_at": {
+              "format": "date-time",
+              "title": "Observed At",
+              "type": "string"
+            },
+            "rate": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0.0,
+                  "maximum": 1000000000.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,25}0*$)\\d{0,12}\\.\\d{0,12}0*$)",
+                  "type": "string"
+                }
+              ],
+              "title": "Rate"
+            },
+            "source_currency": {
+              "pattern": "^[A-Z]{3}$",
+              "title": "Source Currency",
+              "type": "string"
+            },
+            "source_url": {
+              "format": "uri",
+              "maxLength": 2083,
+              "minLength": 1,
+              "title": "Source Url",
+              "type": "string"
+            }
+          },
+          "required": [
+            "source_currency",
+            "destination_currency",
+            "rate",
+            "observed_at",
+            "source_url"
+          ],
+          "title": "ReferenceRate",
+          "type": "object"
+        },
+        "Specialist": {
+          "enum": [
+            "trip-planner",
+            "food",
+            "routes",
+            "activities",
+            "shopping",
+            "memories",
+            "currency-exchange"
+          ],
+          "title": "Specialist",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "exchange_quotes": {
+          "items": {
+            "$ref": "#/$defs/ExchangeQuote"
+          },
+          "maxItems": 40,
+          "title": "Exchange Quotes",
+          "type": "array"
+        },
+        "facts": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 40,
+          "title": "Facts",
+          "type": "array"
+        },
+        "reference_rate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReferenceRate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "EvidenceBatch",
+      "type": "object"
+    }
+  }
+}

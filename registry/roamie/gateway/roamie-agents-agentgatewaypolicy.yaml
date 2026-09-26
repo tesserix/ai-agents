@@ -1,0 +1,19 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: roamie-agents
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+  - group: agentgateway.dev
+    kind: AgentgatewayBackend
+    name: roamie-agents
+  backend:
+    auth:
+      secretRef:
+        name: roamie-agent-upstream
+        key: token
+      location:
+        header:
+          name: Authorization
+          prefix: 'Bearer '

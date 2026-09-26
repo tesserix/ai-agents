@@ -1,0 +1,39 @@
+apiVersion: registry.agentic.dev/v1alpha1
+kind: Agent
+metadata:
+  name: roamie-memories
+  namespace: roamie
+  tenantId: roamie
+  tag: 1.0.0
+  visibility: internal
+  labels:
+    app.kubernetes.io/part-of: roamie
+    ai.tesserix.dev/runtime: tesserix-adk
+    agent.tesserix.app/gateway-export: 'false'
+  annotations:
+    roamie.tesserix.app/release-state: candidate
+    roamie.tesserix.app/definition-revision: 590b7f27158e
+spec:
+  title: Roamie Memories
+  description: Select explicitly consented trip photos for a coherent memory album.
+  model:
+    provider: solo-agentgateway
+    name: roamie-auto
+  a2a:
+    url: http://agentgateway-mcp.agentgateway-system.svc.cluster.local:8082/a2a/v1/roamie-memories
+    preferredTransport: JSONRPC
+    capabilities:
+      streaming: false
+      pushNotifications: false
+    defaultInputModes:
+    - application/json
+    defaultOutputModes:
+    - application/json
+  skills:
+  - id: roamie-memories
+    name: roamie-memories
+    description: Profile-constrained travel assistance with sourced evidence.
+    tags:
+    - roamie
+    - travel
+    - profile-reviewed
