@@ -4,12 +4,24 @@ from urllib.parse import urlsplit
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from roamie_agents.oauth import OAuthClient
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="ROAMIE_AGENTS_", frozen=True, extra="forbid")
 
+    delegation_key: SecretStr = Field(min_length=32)
     api_key: SecretStr = Field(min_length=32)
-    gateway_api_key: SecretStr = Field(min_length=32)
+    gateway_clients: dict[str, OAuthClient] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def unique_workload_identities(self) -> Settings:
+        subjects = {client.subject for client in self.gateway_clients.values()}
+        clients = {client.client_id for client in self.gateway_clients.values()}
+        if len(subjects) != len(self.gateway_clients) or len(clients) != len(self.gateway_clients):
+            raise ValueError("each agent requires a distinct workload identity")
+        return self
+
     gateway_base_url: str = "http://ai-gateway.agentgateway-system.svc.cluster.local:8080/roamie/v1"
     gateway_model: str = "roamie-auto"
     mcp_gateway_origin: str = "https://mcp.tesserix.app"

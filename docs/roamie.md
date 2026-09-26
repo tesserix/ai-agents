@@ -111,3 +111,31 @@ shared profile database. Multi-device revision coordination is not implemented.
 
 Unconfigured providers still return unavailable. No production rollout, registry
 publication, commit or push has happened. The gateway dry run did not mutate state.
+
+## Bound workload and delegation identities
+
+Each logical agent requires a distinct Zitadel machine subject and client ID in
+`ROAMIE_GATEWAY_CLIENTS` (workers) or `ROAMIE_MANAGER_GATEWAY_CLIENTS` (manager).
+Each value contains `subject`, `client_id`, and `client_secret`; supply the JSON
+through Secret Manager/External Secrets, never a values file. Missing identities
+stop startup and duplicate subjects or client IDs are rejected. The manager map
+contains `roamie-trip-manager`; worker keys are `roamie-{specialist}`. Static
+`GATEWAY_API_KEY` and `WORKER_API_KEY` settings are no longer used.
+
+The ADK credential broker/cache obtains short-lived client-credentials tokens,
+refreshes 30 seconds before expiry, coalesces concurrent refreshes and denies
+calls when credentials cannot be refreshed. Credential transports restrict the
+destination origin and never forward gateway credentials to another origin.
+
+Manager and worker services additionally share a separate 32-character minimum
+`DELEGATION_KEY`. Every A2A request and response is signed with distinct signing
+purposes. The envelope binds tenant, personal manager identity, profile revision,
+specialist, unpredictable request ID, complete request digest and a 120-second
+expiry. Direct unsigned worker payloads and responses from another request fail
+closed. Both manager AI review passes inherit the personal manager principal;
+workers inherit that principal with only their specialist scope.
+
+This is the application protocol implementation. Activation still requires the
+corresponding Zitadel role grants, gateway subject restrictions, MCP verified
+claim mapping, authoritative profile checks and a live end-to-end probe. These
+checks must pass before enabling the currently disabled workload chart.

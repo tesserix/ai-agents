@@ -1,33 +1,25 @@
 import asyncio
 import hmac
 import secrets
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from typing import Annotated, Literal, Protocol
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import Field, ValidationError
+from pydantic import Field
+from tesserix_adk.core import principal_scope
 
 from roamie_agents.base import Contract
 from roamie_agents.config import Settings
 from roamie_agents.contracts import (
-    Evidence,
     RecommendationRequest,
     Specialist,
 )
 from roamie_agents.definitions import DEFINITIONS
+from roamie_agents.delegation import DelegationError, Delegations
 from roamie_agents.evidence import EvidenceBatch
-from roamie_agents.exchange import ExchangeQuote, ReferenceRate
 from roamie_agents.runtime import TravelFailure, TravelService
-
-
-class WorkerPayload(Contract):
-    reference_rate: ReferenceRate | None = None
-    exchange_quotes: Annotated[list[ExchangeQuote], Field(max_length=40)] = Field(
-        default_factory=list
-    )
-    request: RecommendationRequest
-    facts: Annotated[list[Evidence], Field(max_length=40)]
 
 
 class TextPart(Contract):
@@ -60,9 +52,25 @@ class Source(Protocol):
 type SourceFactory = Callable[[str], AsyncIterator[Source]]
 
 
-def create_app(*, settings: Settings, service: TravelService) -> FastAPI:
-    app = FastAPI(title="Internal Roamie specialist workers", docs_url=None, redoc_url=None)
+def create_app(
+    *,
+    settings: Settings,
+    service: TravelService,
+    on_close: Callable[[], Awaitable[None]] | None = None,
+) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            if on_close is not None:
+                await on_close()
+
+    app = FastAPI(
+        title="Internal Roamie specialist workers", docs_url=None, redoc_url=None, lifespan=lifespan
+    )
     slots = asyncio.Semaphore(settings.max_in_flight)
+    delegations = Delegations(key=settings.delegation_key)
 
     @app.get("/healthz")
     @app.get("/readyz")
@@ -110,27 +118,35 @@ def create_app(*, settings: Settings, service: TravelService) -> FastAPI:
     ) -> dict[str, object]:
         authorize(authorization)
         try:
-            payload = WorkerPayload.model_validate_json(body.params.message.parts[0].text)
-        except ValidationError as error:
-            raise HTTPException(422, "invalid worker payload") from error
+            delegated, identity = delegations.verify_request(
+                body.params.message.parts[0].text, specialist
+            )
+            payload = delegated.payload
+        except DelegationError as error:
+            raise HTTPException(401, "invalid manager delegation") from error
         if slots.locked():
             raise HTTPException(429, "capacity exceeded")
         async with slots:
             async with asyncio.timeout(55):
-                result = await service.recommend(
-                    specialist,
-                    payload.request,
-                    facts=payload.facts,
-                    reference_rate=payload.reference_rate,
-                    exchange_quotes=payload.exchange_quotes,
-                )
+                with principal_scope(identity.principal):
+                    result = await service.recommend(
+                        specialist,
+                        payload.request,
+                        facts=payload.facts,
+                        reference_rate=payload.reference_rate,
+                        exchange_quotes=payload.exchange_quotes,
+                    )
+        try:
+            signed = delegations.response(delegated, result)
+        except DelegationError as error:
+            raise HTTPException(401, "expired manager delegation") from error
         return {
             "jsonrpc": "2.0",
             "id": body.id,
             "result": {
                 "id": result.run_id or secrets.token_hex(16),
                 "status": {"state": "completed"},
-                "artifacts": [{"parts": [{"kind": "text", "text": result.model_dump_json()}]}],
+                "artifacts": [{"parts": [{"kind": "text", "text": signed.model_dump_json()}]}],
             },
         }
 

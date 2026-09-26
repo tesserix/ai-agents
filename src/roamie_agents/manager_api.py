@@ -2,7 +2,7 @@ import asyncio
 import hashlib
 import hmac
 import time
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Annotated
 
@@ -35,10 +35,22 @@ def create_manager_app(
     profile_signing_key: SecretStr,
     clock: Callable[[], float] = time.time,
     max_in_flight: int = 16,
+    on_close: Callable[[], Awaitable[None]] | None = None,
 ) -> FastAPI:
     if min(len(api_key.get_secret_value()), len(profile_signing_key.get_secret_value())) < 32:
         raise ValueError("manager credentials require at least 32 characters")
-    app = FastAPI(title="Roamie personal trip manager", docs_url=None, redoc_url=None)
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            if on_close is not None:
+                await on_close()
+
+    app = FastAPI(
+        title="Roamie personal trip manager", docs_url=None, redoc_url=None, lifespan=lifespan
+    )
 
     slots = asyncio.Semaphore(max_in_flight)
 

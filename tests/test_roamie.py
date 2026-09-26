@@ -176,7 +176,11 @@ async def test_http_edge_exposes_workers_only_through_a2a():
     from roamie_agents.api import create_app
     from roamie_agents.config import Settings
 
-    settings = Settings(api_key="a" * 32, gateway_api_key="b" * 32, mcp_schema_digest="1" * 64)
+    settings = Settings(
+        delegation_key="d" * 32,
+        api_key="a" * 32,
+        mcp_schema_digest="1" * 64,
+    )
     app = create_app(settings=settings, service=TravelService(provider=provider("unused")))
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -206,7 +210,6 @@ def test_gateway_configuration_cannot_select_direct_or_other_tenant_routes(url, 
     with pytest.raises(ValidationError):
         Settings(
             api_key="a" * 32,
-            gateway_api_key="b" * 32,
             mcp_schema_digest="1" * 64,
             mcp_gateway_origin=url,
             mcp_gateway_path=path,

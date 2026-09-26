@@ -54,6 +54,7 @@ async def test_signed_profile_boundary_fails_closed(raw, authorization, delegate
             workers={},
             client=A2AWorkerClient(api_key=SecretStr("a" * 32), timeout=5, client=worker_http),
             supervisor=SupervisorService(provider=ScriptedProvider()),
+            delegation_key=SecretStr("d" * 32),
             identity_key=SecretStr("c" * 32),
         )
         app = create_manager_app(
@@ -91,6 +92,7 @@ async def test_provider_failure_returns_unavailable_without_exposing_error():
             workers={},
             client=A2AWorkerClient(api_key=SecretStr("a" * 32), timeout=5, client=worker_http),
             supervisor=SupervisorService(provider=ScriptedProvider()),
+            delegation_key=SecretStr("d" * 32),
             identity_key=SecretStr("c" * 32),
         )
         app = create_manager_app(

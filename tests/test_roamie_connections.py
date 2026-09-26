@@ -4,22 +4,24 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
+from pydantic import SecretStr
 from tesserix_adk.core import Message, ModelRequest, TextPart
 
 from roamie_agents.config import Settings
 from roamie_agents.connections import GatewaySecrets, gateway_provider, source_session
 from roamie_agents.contracts import RecommendationRequest, Specialist
+from roamie_agents.oauth import OAuthClient, WorkloadTokens
 
 
 def settings(**values):
-    return Settings(api_key="a" * 32, gateway_api_key="b" * 32, **values)
+    return Settings(delegation_key="d" * 32, api_key="a" * 32, **values)
 
 
 async def test_roamie_model_uses_only_model_gateway_credential():
     def reply(request):
         assert request.url.path == "/roamie/v1/chat/completions"
         assert request.url.host == "ai-gateway.agentgateway-system.svc.cluster.local"
-        assert request.headers["authorization"] == "Bearer " + "b" * 32
+        assert request.headers["authorization"] == "Bearer workload-token"
         return httpx.Response(
             200,
             json={
@@ -37,7 +39,19 @@ async def test_roamie_model_uses_only_model_gateway_credential():
 
     config = settings(mcp_schema_digest="1" * 64)
     assert GatewaySecrets(config).secret("other") is None
-    provider = gateway_provider(config, transport=httpx.MockTransport(reply))
+    tokens = WorkloadTokens(
+        agent="roamie-trip-manager",
+        client=OAuthClient(
+            subject="manager", client_id="manager", client_secret=SecretStr("s" * 32)
+        ),
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(
+                200,
+                json={"access_token": "workload-token", "expires_in": 120, "token_type": "Bearer"},
+            )
+        ),
+    )
+    provider = gateway_provider(config, tokens=tokens, transport=httpx.MockTransport(reply))
     try:
         result = await provider.complete(
             ModelRequest(
@@ -48,6 +62,7 @@ async def test_roamie_model_uses_only_model_gateway_credential():
         assert result.content == "{}"
     finally:
         await provider.aclose()
+        await tokens.aclose()
 
 
 async def test_adk_mcp_session_discovers_and_calls_only_pinned_gateway_tool():
