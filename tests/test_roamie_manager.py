@@ -417,3 +417,22 @@ async def test_manager_recomputes_currency_exchange_receipts(tampered):
             result = await manager.manage(**arguments)
             assert result.response.exchange_comparisons[0].received_minor == 10000
             assert len(result.review_run_ids) == 2
+
+
+async def test_manager_identity_matches_api_contract_and_is_user_trip_scoped():
+    async with httpx.AsyncClient() as client:
+        manager = PersonalTripManager(
+            workers={},
+            client=A2AWorkerClient(api_key=SecretStr("fixture"), timeout=5, client=client),
+            supervisor=reviewer(),
+            identity_key=SecretStr("d" * 32),
+            delegation_key=SecretStr("e" * 32),
+        )
+        profile = Profile(subject="verified", trip_id="東京", revision="1")
+        identity = manager.manager_id(profile)
+        assert (
+            identity
+            == "trip-manager-eec1e0a022fe5a46c471ddeb38811901e1bda2af56938a7908b3fb6b0850d7e6"
+        )
+        assert identity != manager.manager_id(profile.model_copy(update={"subject": "other"}))
+        assert identity != manager.manager_id(profile.model_copy(update={"trip_id": "other"}))

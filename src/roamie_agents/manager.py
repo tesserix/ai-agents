@@ -1,8 +1,9 @@
 import asyncio
 import hashlib
 import hmac
+import inspect
 import json
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import UTC, date, datetime
 from typing import Annotated
 
@@ -49,6 +50,11 @@ class ManagedResponse(Contract):
     review_run_ids: tuple[str, str]
 
 
+async def revision_value(check: Callable[[], str | Awaitable[str]]) -> str:
+    result = check()
+    return await result if inspect.isawaitable(result) else result
+
+
 class PersonalTripManager:
     def __init__(
         self,
@@ -73,7 +79,7 @@ class PersonalTripManager:
         self,
         *,
         profile: Profile,
-        current_revision: Callable[[], str],
+        current_revision: Callable[[], str | Awaitable[str]],
         specialist: Specialist,
         request: RecommendationRequest,
         facts: Sequence[Evidence],
@@ -109,7 +115,9 @@ class PersonalTripManager:
             raise TravelFailure("manager_review_unavailable") from error
 
     def manager_id(self, profile: Profile) -> str:
-        material = json.dumps(["roamie", profile.subject, profile.trip_id], separators=(",", ":"))
+        material = json.dumps(
+            ["roamie", profile.subject, profile.trip_id], separators=(",", ":"), ensure_ascii=False
+        )
         identity = hmac.new(
             self._identity_key.get_secret_value().encode(), material.encode(), hashlib.sha256
         ).hexdigest()
@@ -118,7 +126,7 @@ class PersonalTripManager:
     async def _manage(
         self,
         profile: Profile,
-        current_revision: Callable[[], str],
+        current_revision: Callable[[], str | Awaitable[str]],
         specialist: Specialist,
         request: RecommendationRequest,
         facts: Sequence[Evidence],
@@ -128,7 +136,7 @@ class PersonalTripManager:
         endpoint = self._workers.get(specialist)
         if endpoint is None:
             raise TravelFailure("specialist_unavailable")
-        if current_revision() != profile.revision:
+        if await revision_value(current_revision) != profile.revision:
             raise TravelFailure("profile_changed")
         effective = request.model_dump()
         effective.update(
@@ -247,7 +255,7 @@ class PersonalTripManager:
         )
         if reviewed.verdict.decision != "approve" or reviewed.verdict.confidence < 0.8:
             raise TravelFailure("response_not_approved")
-        if current_revision() != profile.revision:
+        if await revision_value(current_revision) != profile.revision:
             raise TravelFailure("profile_changed")
         now = self._clock()
         fresh_ids = {

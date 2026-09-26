@@ -115,7 +115,7 @@ publication, commit or push has happened. The gateway dry run did not mutate sta
 ## Bound workload and delegation identities
 
 Each logical agent requires a distinct Zitadel machine subject and client ID in
-`ROAMIE_GATEWAY_CLIENTS` (workers) or `ROAMIE_MANAGER_GATEWAY_CLIENTS` (manager).
+`ROAMIE_AGENTS_GATEWAY_CLIENTS` (workers) or `ROAMIE_MANAGER_GATEWAY_CLIENTS` (manager).
 Each value contains `subject`, `client_id`, and `client_secret`; supply the JSON
 through Secret Manager/External Secrets, never a values file. Missing identities
 stop startup and duplicate subjects or client IDs are rejected. The manager map
@@ -137,5 +137,7 @@ workers inherit that principal with only their specialist scope.
 
 This is the application protocol implementation. Activation still requires the
 corresponding Zitadel role grants, gateway subject restrictions, MCP verified
-claim mapping, authoritative profile checks and a live end-to-end probe. These
+claim mapping and a live end-to-end probe. The manager now verifies its complete
+profile with the private Roamie API before evidence collection and during review;
+that API must include the authoritative-profile migration and routes before rollout. These
 checks must pass before enabling the currently disabled workload chart.

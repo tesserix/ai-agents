@@ -15,6 +15,7 @@ from roamie_agents.definitions import manager_definition
 from roamie_agents.manager import PersonalTripManager
 from roamie_agents.manager_api import create_manager_app
 from roamie_agents.oauth import GatewayTransport
+from roamie_agents.profile_authority import ProfileAuthority
 
 
 class ManagerSettings(Settings):
@@ -26,6 +27,7 @@ class ManagerSettings(Settings):
 
 settings = ManagerSettings()
 tokens = workload_tokens(settings, "roamie-trip-manager")
+authority = ProfileAuthority(key=settings.api_key)
 provider = gateway_provider(settings, tokens=tokens)
 worker_http = httpx.AsyncClient(
     timeout=50,
@@ -66,6 +68,7 @@ async def close() -> None:
     await worker_http.aclose()
     await provider.aclose()
     await tokens.aclose()
+    await authority.aclose()
 
 
 app = create_manager_app(
@@ -74,4 +77,5 @@ app = create_manager_app(
     on_close=close,
     api_key=settings.api_key,
     profile_signing_key=settings.profile_signing_key,
+    profile_authority=authority.current_revision,
 )
