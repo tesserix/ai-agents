@@ -12,7 +12,7 @@ metadata:
     agent.tesserix.app/gateway-export: 'false'
   annotations:
     roamie.tesserix.app/release-state: candidate
-    roamie.tesserix.app/definition-revision: 140b801402cc
+    roamie.tesserix.app/definition-revision: fa12270e780c
     roamie.tesserix.app/signed-http-path: /v1/trip-manager
 spec:
   title: Roamie Trip Manager

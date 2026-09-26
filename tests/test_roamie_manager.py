@@ -754,3 +754,34 @@ async def test_advisory_cannot_hide_profile_revision_change():
                     )
                 ],
             )
+
+
+async def test_manager_can_review_measured_three_plan_evidence_usage():
+    from tesserix_adk.core import Usage
+
+    response = ModelResponse(
+        content=json.dumps(
+            {
+                "decision": "approve",
+                "confidence": 1.0,
+                "summary": "Three sourced options fit the profile",
+                "issues": [],
+            }
+        ),
+        usage=Usage(input_tokens=17205, output_tokens=80),
+    )
+    service = SupervisorService(
+        provider=ScriptedProvider(
+            response,
+            capabilities=ModelCapabilities(structured_output=True, context_window_tokens=32768),
+        ),
+        definition=manager_definition(),
+    )
+    result = await service.supervise(
+        task="Review three budgeted trips",
+        answer="Sourced options",
+        context="Verified profile and provider evidence",
+        tenant="roamie",
+    )
+    assert result.verdict.decision == "approve"
+    assert result.input_tokens == 17205
