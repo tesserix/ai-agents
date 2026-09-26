@@ -14,6 +14,7 @@ from orchestrator_agent.config import WorkerEndpoint
 from orchestrator_agent.supervision import SupervisorService
 from orchestrator_agent.workers import A2AWorkerClient
 from roamie_agents.contracts import RecommendationRequest, Specialist, TravelResponse
+from roamie_agents.definitions import manager_definition
 from roamie_agents.delegation import DelegatedRequest, DelegatedResponse, canonical
 from roamie_agents.manager import PersonalTripManager, Profile
 from roamie_agents.runtime import TravelFailure
@@ -56,6 +57,17 @@ def reviewer(decision="approve"):
 
 async def test_manager_checks_request_and_response_and_scopes_identity():
     calls = []
+    approved = ModelResponse(
+        content=json.dumps(
+            {"decision": "approve", "confidence": 1.0, "summary": "Verified", "issues": []}
+        )
+    )
+    model = ScriptedProvider(
+        approved,
+        approved,
+        capabilities=ModelCapabilities(structured_output=True, context_window_tokens=32768),
+    )
+    supervisor = SupervisorService(provider=model, definition=manager_definition())
 
     def reply(request):
         calls.append(json.loads(request.content))
@@ -83,7 +95,7 @@ async def test_manager_checks_request_and_response_and_scopes_identity():
                 )
             },
             client=worker,
-            supervisor=reviewer(),
+            supervisor=supervisor,
             delegation_key=SecretStr("d" * 32),
             identity_key=SecretStr("a" * 32),
         )
@@ -101,6 +113,12 @@ async def test_manager_checks_request_and_response_and_scopes_identity():
         prompt = calls[0]["params"]["message"]["parts"][0]["text"]
         assert "peanut" in prompt
         assert "user-1" not in prompt
+        preflight = "".join(part.text for part in model.requests[0].messages[-1].content)
+        postflight = "".join(part.text for part in model.requests[1].messages[-1].content)
+        assert "PROPOSED REQUEST (untrusted" in preflight
+        assert "ANSWER (untrusted worker output" not in preflight
+        assert "ANSWER (untrusted worker output" in postflight
+        assert "peanut" in preflight and "peanut" in postflight
 
 
 async def test_rejected_preflight_never_calls_worker():
