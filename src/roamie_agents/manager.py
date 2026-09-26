@@ -194,7 +194,22 @@ class PersonalTripManager:
                         profile,
                         current_revision,
                         kind,
-                        bounded.model_copy(update={"plan_options": False}),
+                        bounded.model_copy(
+                            update={
+                                "plan_options": False,
+                                "prompt": (
+                                    "Review weather for this destination and these dates. "
+                                    "Preserve forecast coverage warnings "
+                                    "and preparation suggestions."
+                                    if kind == Specialist.WEATHER
+                                    else "Review entry preparation for this destination "
+                                    "and these dates. "
+                                    "Provide the official-source checklist and clearly identify "
+                                    "unverified eligibility, fees and "
+                                    "missing traveller information."
+                                ),
+                            }
+                        ),
                         supporting,
                         None,
                         None,

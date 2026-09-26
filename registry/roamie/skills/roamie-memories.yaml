@@ -4,7 +4,7 @@ metadata:
   name: roamie-memories
   namespace: roamie
   tenantId: roamie
-  tag: 1.1.0
+  tag: 1.1.1
   visibility: public
   labels:
     app.kubernetes.io/part-of: roamie
