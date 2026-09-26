@@ -97,6 +97,7 @@ async def test_three_budget_plans_preserve_grounding_and_budget_totals():
         "duplicate_tier",
         "wrong_city",
         "unsupported_accommodation",
+        "transit_past_midnight",
     ],
 )
 async def test_invalid_plan_cannot_reach_the_manager(change):
@@ -117,6 +118,12 @@ async def test_invalid_plan_cannot_reach_the_manager(change):
         value["options"][0]["days"][0]["destination"] = "Ho Chi Minh City"
     if change == "unsupported_accommodation":
         value["options"][0]["accommodation_ids"] = ["museum"]
+    if change == "transit_past_midnight":
+        output_stops = value["options"][0]["days"][0]["stops"]
+        output_stops[0].update(time="22:00", minutes=60)
+        output_stops.append(
+            {"evidence_id": "museum", "time": "23:00", "minutes": 60, "note": "late"}
+        )
     if change == "duplicate_tier":
         value["options"][2]["tier"] = "budget"
     service = TravelService(
@@ -164,3 +171,42 @@ async def test_rejected_plan_records_terminal_run_without_model_or_profile_paylo
     assert event["run_id"]
     assert "private-hallucination" not in json.dumps(logs)
     assert "Three Vietnam plans" not in json.dumps(logs)
+
+
+async def test_short_model_references_restore_original_sources_and_accommodation():
+    import json
+
+    hotel = evidence().model_copy(update={"id": "hotel-original", "place_kind": "accommodation"})
+    output = proposal()
+    for option in output["options"]:
+        option["accommodation_ids"] = ["p1"]
+        option["days"][0]["stops"][0]["evidence_id"] = "p0"
+    model = ScriptedProvider(ModelResponse(content=json.dumps(output)))
+    result = await TravelService(provider=model, clock=lambda: NOW).recommend(
+        Specialist.TRIP, request(), facts=[evidence(), hotel]
+    )
+    assert {item.id for item in result.recommendations} == {"museum", "hotel-original"}
+    assert result.trip_options[0].accommodation_ids == ("hotel-original",)
+    assert result.trip_options[0].days[0].stops[0].evidence_id == "museum"
+    prompt = "".join(part.text for part in model.requests[0].messages[-1].content)
+    assert {fact["id"] for fact in json.loads(prompt)["EVIDENCE"]} == {"p0", "p1"}
+
+
+async def test_adjacent_proposed_visits_receive_transit_buffer_before_review():
+    import json
+
+    output = proposal()
+    output["options"][0]["days"][0]["stops"].append(
+        {"evidence_id": "museum", "time": "11:00", "minutes": 60, "note": "Later visit"}
+    )
+    output["options"][0]["days"][0]["stops"].append(
+        {"evidence_id": "museum", "time": "12:00", "minutes": 30, "note": "Last visit"}
+    )
+    result = await TravelService(
+        provider=ScriptedProvider(ModelResponse(content=json.dumps(output))), clock=lambda: NOW
+    ).recommend(Specialist.TRIP, request(), facts=[evidence()])
+    assert [stop.time for stop in result.trip_options[0].days[0].stops] == [
+        "10:00",
+        "11:15",
+        "12:30",
+    ]

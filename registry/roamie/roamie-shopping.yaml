@@ -4,7 +4,7 @@ metadata:
   name: roamie-shopping-agent
   namespace: roamie
   tenantId: roamie
-  tag: 1.1.5
+  tag: 1.1.6
   visibility: public
   labels:
     app.kubernetes.io/part-of: roamie
@@ -39,7 +39,7 @@ spec:
     healthPath: /healthz
   skills:
   - ref: roamie-shopping
-    version: 1.1.5
+    version: 1.1.6
   tools:
   - ref: roamie-travel-search
     version: 1.1.0

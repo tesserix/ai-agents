@@ -31,7 +31,7 @@ def test_roamie_definitions_are_discoverable_without_enabling_routes():
         for path in Path("registry/roamie").glob(pattern):
             document = yaml.safe_load(path.read_text())
             assert document["metadata"]["visibility"] == "public"
-            assert document["metadata"]["tag"] == "1.1.5"
+            assert document["metadata"]["tag"] == "1.1.6"
             assert document["metadata"]["labels"]["agent.tesserix.app/gateway-export"] == "false"
 
 
@@ -57,7 +57,7 @@ def test_roamie_agents_resolve_pinned_runtime_and_dependencies():
         assert spec["runtime"]["type"] == "container"
         assert "@sha256:" in spec["runtime"]["image"]
         assert len(spec["runtime"]["image"].split("@sha256:")[1]) == 64
-        assert spec["skills"] == [{"ref": name, "version": "1.1.5"}]
+        assert spec["skills"] == [{"ref": name, "version": "1.1.6"}]
         assert spec["tools"] == [{"ref": "roamie-travel-search", "version": "1.1.0"}]
         assert spec["mcpServers"] == [{"ref": "roamie-travel-mcp", "version": "1.1.0"}]
 

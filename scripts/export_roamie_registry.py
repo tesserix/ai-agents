@@ -15,7 +15,7 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
             "name": f"{agent.name}-agent",
             "namespace": "roamie",
             "tenantId": "roamie",
-            "tag": "1.1.5",
+            "tag": "1.1.6",
             "visibility": "public",
             "labels": {
                 "app.kubernetes.io/part-of": "roamie",
@@ -57,7 +57,7 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
                 ),
                 "healthPath": "/healthz",
             },
-            "skills": [{"ref": agent.name, "version": "1.1.5"}],
+            "skills": [{"ref": agent.name, "version": "1.1.6"}],
             "tools": [{"ref": "roamie-travel-search", "version": "1.1.0"}],
             "mcpServers": [{"ref": "roamie-travel-mcp", "version": "1.1.0"}],
         },
