@@ -572,6 +572,11 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(planning)
         kind = incoming.context.specialist
         called.append(kind)
         assert kind == Specialist.TRIP or not incoming.payload.request.plan_options
+        if kind != Specialist.TRIP:
+            assert incoming.payload.request.prompt != "Plan"
+            assert (
+                "weather" if kind == Specialist.WEATHER else "entry"
+            ) in incoming.payload.request.prompt.lower()
         output = TravelResponse(
             status="ok",
             specialist=kind,

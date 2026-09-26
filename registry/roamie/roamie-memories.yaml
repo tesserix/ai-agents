@@ -4,7 +4,7 @@ metadata:
   name: roamie-memories-agent
   namespace: roamie
   tenantId: roamie
-  tag: 1.1.0
+  tag: 1.1.1
   visibility: public
   labels:
     app.kubernetes.io/part-of: roamie
@@ -39,7 +39,7 @@ spec:
     healthPath: /healthz
   skills:
   - ref: roamie-memories
-    version: 1.1.0
+    version: 1.1.1
   tools:
   - ref: roamie-travel-search
     version: 1.1.0
