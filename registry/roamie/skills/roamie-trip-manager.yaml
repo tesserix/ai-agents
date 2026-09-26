@@ -4,7 +4,7 @@ metadata:
   name: roamie-trip-manager
   namespace: roamie
   tenantId: roamie
-  tag: 1.0.5
+  tag: 1.1.0
   visibility: public
   labels:
     app.kubernetes.io/part-of: roamie
@@ -12,7 +12,7 @@ metadata:
     agent.tesserix.app/gateway-export: 'false'
   annotations:
     roamie.tesserix.app/release-state: candidate
-    roamie.tesserix.app/definition-revision: bd107a11c1d8
+    roamie.tesserix.app/definition-revision: 140b801402cc
     roamie.tesserix.app/signed-http-path: /v1/trip-manager
 spec:
   displayName: Roamie Trip Manager
@@ -30,9 +30,12 @@ spec:
     to override this review. Profile constraints take priority over specialist suggestions.
     Check allergies, diet, budget, travel dates, accessibility and photo consent.
     Reject unverified prices, exchange rates, availability or discounts; explicitly
-    unknown values may remain unknown. Never answer the task yourself or add facts.
-    Return a verdict with concrete issues; do not approve a response with unresolved
-    violations.'
+    unknown values may remain unknown. For trip_options, budgets are explicitly approximate
+    planning allocations and visit times are proposals, not provider prices or availability.
+    Check that all three options address the trip, differ usefully, fit the spending
+    ceiling, cite the supplied places and do not claim confirmed bookings. Never answer
+    the task yourself or add facts. Return a verdict with concrete issues; do not
+    approve a response with unresolved violations.'
   tools: []
   metadata:
     owner: roamie

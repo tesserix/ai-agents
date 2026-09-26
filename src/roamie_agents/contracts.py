@@ -7,6 +7,7 @@ from pydantic import AwareDatetime, Field, HttpUrl, model_validator
 
 from roamie_agents.base import Contract, Location
 from roamie_agents.exchange import ExchangeComparison
+from roamie_agents.planning import PlanningStay, TripOption
 
 
 class Specialist(StrEnum):
@@ -20,6 +21,9 @@ class Specialist(StrEnum):
 
 
 class RecommendationRequest(Contract):
+    plan_options: bool = False
+    stays: Annotated[tuple[PlanningStay, ...], Field(max_length=4)] = ()
+    travellers: int = Field(default=1, ge=1, le=12, strict=True)
     exchange_amount_minor: int | None = Field(default=None, ge=1, le=10**12, strict=True)
     exchange_destination_currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
     prompt: str = Field(min_length=1, max_length=6000)
@@ -61,6 +65,8 @@ class RecommendationRequest(Contract):
 
 
 class Evidence(Contract):
+    place_kind: Literal["place", "accommodation"] = "place"
+    destination: str | None = Field(default=None, max_length=200)
     id: str = Field(min_length=1, max_length=120)
     name: str = Field(min_length=1, max_length=200)
     category: Specialist
@@ -113,6 +119,7 @@ class Recommendation(Evidence):
 
 
 class TravelResponse(Contract):
+    trip_options: tuple[TripOption, ...] = ()
     status: Literal["ok", "unavailable", "no_matches"]
     specialist: Specialist
     recommendations: tuple[Recommendation, ...] = ()

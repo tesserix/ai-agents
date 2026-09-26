@@ -30,7 +30,7 @@ class MCPSource:
 
     async def search(self, specialist: Specialist, request: RecommendationRequest) -> EvidenceBatch:
         try:
-            async with asyncio.timeout(12):
+            async with asyncio.timeout(30):
                 info = await self._session.initialize()
                 if "tools" not in info.capabilities:
                     raise TravelFailure("tools_unavailable")
@@ -52,7 +52,7 @@ class MCPSource:
                     self._tool,
                     {"specialist": specialist.value, "request": request.model_dump(mode="json")},
                     meta={},
-                    timeout_seconds=8,
+                    timeout_seconds=25,
                 )
                 if result.is_error or result.structured_content is None:
                     raise TravelFailure("provider_unavailable")

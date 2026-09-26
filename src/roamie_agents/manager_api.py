@@ -64,7 +64,7 @@ def create_manager_app(
         if slots.locked():
             return JSONResponse({"detail": "capacity exceeded"}, status_code=429)
         try:
-            async with slots, asyncio.timeout(110):
+            async with slots, asyncio.timeout(150):
                 return await call_next(request)
         except TimeoutError:
             return JSONResponse({"detail": "trip manager deadline exceeded"}, status_code=503)

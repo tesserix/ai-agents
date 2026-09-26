@@ -2,7 +2,7 @@ from pathlib import Path
 
 import yaml
 
-from roamie_agents.definitions import DEFINITIONS, manager_definition
+from roamie_agents.definitions import DEFINITIONS, manager_definition, planning_definition
 
 root = Path("registry/roamie")
 root.mkdir(parents=True, exist_ok=True)
@@ -15,7 +15,7 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
             "name": f"{agent.name}-agent",
             "namespace": "roamie",
             "tenantId": "roamie",
-            "tag": "1.0.5",
+            "tag": "1.1.0",
             "visibility": "public",
             "labels": {
                 "app.kubernetes.io/part-of": "roamie",
@@ -57,9 +57,9 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
                 ),
                 "healthPath": "/healthz",
             },
-            "skills": [{"ref": agent.name, "version": "1.0.5"}],
-            "tools": [{"ref": "roamie-travel-search", "version": "1.0.1"}],
-            "mcpServers": [{"ref": "roamie-travel-mcp", "version": "1.0.1"}],
+            "skills": [{"ref": agent.name, "version": "1.1.0"}],
+            "tools": [{"ref": "roamie-travel-search", "version": "1.1.0"}],
+            "mcpServers": [{"ref": "roamie-travel-mcp", "version": "1.1.0"}],
         },
     }
     if agent.name == "roamie-trip-manager":
@@ -88,6 +88,13 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
             },
         },
     }
+    if agent.name == "roamie-trip-planner":
+        skill["spec"]["instructions"] += (
+            "\nWhen plan_options is true: " + planning_definition().agent.instructions
+        )
+        skill["metadata"]["annotations"]["roamie.tesserix.app/planning-definition-revision"] = (
+            planning_definition().revision
+        )
     (skill_dir / f"{agent.name}.yaml").write_text(yaml.safe_dump(skill, sort_keys=False))
     skill_path = Path("skills/roamie") / agent.name
     skill_path.mkdir(parents=True, exist_ok=True)
@@ -97,7 +104,7 @@ for definition in (*DEFINITIONS.values(), manager_definition()):
         + "\ndescription: "
         + manifest["spec"]["description"]
         + "\n---\n\n"
-        + agent.instructions
+        + skill["spec"]["instructions"]
         + "\n\nUse only verified MCP evidence. Return through the personal trip manager.\n"
     )
 
@@ -248,7 +255,7 @@ for route, role in [("roamie-model", "roamie.models"), ("roamie-agents", "roamie
                         ]
                     },
                 },
-                "timeouts": {"request": "55s"},
+                "timeouts": {"request": "80s"},
                 "rateLimit": {"local": [{"requests": 120, "burst": 16, "unit": "Minutes"}]},
             },
         },

@@ -454,3 +454,89 @@ async def test_manager_identity_matches_api_contract_and_is_user_trip_scoped():
         )
         assert identity != manager.manager_id(profile.model_copy(update={"subject": "other"}))
         assert identity != manager.manager_id(profile.model_copy(update={"trip_id": "other"}))
+
+
+@pytest.mark.parametrize("corrupt", [False, True])
+async def test_manager_independently_validates_three_plans_before_final_review(corrupt):
+    from datetime import date
+
+    from roamie_agents.contracts import Evidence
+    from roamie_agents.planning import PlanSelection
+    from roamie_agents.runtime import project
+    from test_roamie_planning import proposal
+
+    now = datetime(2026, 9, 26, tzinfo=UTC)
+    fact = Evidence(
+        id="museum",
+        name="Museum",
+        category="activities",
+        source_url="https://maps.google.com/place",
+        observed_at=now,
+    )
+    value = proposal()
+    if corrupt:
+        value["options"][2]["budget"]["food_minor"] = 10000
+    output = TravelResponse(
+        status="ok",
+        specialist=Specialist.TRIP,
+        recommendations=(project(fact, None),),
+        trip_options=PlanSelection.model_validate(value).options,
+    )
+
+    def reply(request):
+        incoming = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "jsonrpc": "2.0",
+                "id": incoming["id"],
+                "result": {
+                    "status": {"state": "completed"},
+                    "artifacts": [
+                        {"parts": [{"kind": "text", "text": signed_reply(request, output)}]}
+                    ],
+                },
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as client:
+        manager = PersonalTripManager(
+            workers={
+                Specialist.TRIP: WorkerEndpoint(
+                    name="roamie-trip-planner",
+                    url="https://gateway.example.org/a2a/v1/roamie-trip-planner",
+                )
+            },
+            client=A2AWorkerClient(api_key=SecretStr("fixture"), timeout=5, client=client),
+            supervisor=reviewer(),
+            delegation_key=SecretStr("d" * 32),
+            identity_key=SecretStr("a" * 32),
+            clock=lambda: now,
+        )
+
+        async def run():
+            return await manager.manage(
+                profile=Profile(
+                    subject="user",
+                    trip_id="trip",
+                    revision="1",
+                    start_date=date(2026, 10, 1),
+                    end_date=date(2026, 10, 1),
+                    currency="AUD",
+                    budget_minor=8000,
+                ),
+                current_revision=lambda: "1",
+                specialist=Specialist.TRIP,
+                request=RecommendationRequest(
+                    prompt="Three plans", plan_options=True, currency="AUD"
+                ),
+                facts=[fact],
+            )
+
+        if corrupt:
+            with pytest.raises(TravelFailure, match="invalid_trip_options"):
+                await run()
+        else:
+            result = await run()
+            assert len(result.response.trip_options) == 3
+            assert len(set(result.review_run_ids)) == 2

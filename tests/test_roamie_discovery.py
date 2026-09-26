@@ -13,15 +13,15 @@ ORIGIN = "http://agentgateway-mcp.agentgateway-system.svc.cluster.local:8082"
 def graph():
     return {
         "agent": {
-            "metadata": {"name": "roamie-food-agent", "namespace": "roamie", "tag": "1.0.2"},
+            "metadata": {"name": "roamie-food-agent", "namespace": "roamie", "tag": "1.1.0"},
             "spec": {"a2a": {"url": ORIGIN + "/a2a/v1/roamie-food"}},
         },
         "resolved": {
             kind: [{"metadata": {"name": name, "namespace": "roamie", "tag": version}}]
             for kind, name, version in (
-                ("skills", "roamie-food", "1.0.2"),
-                ("tools", "roamie-travel-search", "1.0.1"),
-                ("mcpServers", "roamie-travel-mcp", "1.0.1"),
+                ("skills", "roamie-food", "1.1.0"),
+                ("tools", "roamie-travel-search", "1.1.0"),
+                ("mcpServers", "roamie-travel-mcp", "1.1.0"),
             )
         },
     }
@@ -43,7 +43,7 @@ async def test_registry_worker_resolves_pinned_graph_and_caches():
         assert first.url == ORIGIN + "/a2a/v1/roamie-food"
         assert await workers.find(Specialist.FOOD) == first
         assert len(calls) == 1
-        assert calls[0].url.path == "/v0/agents/roamie-food-agent/1.0.2/resolved"
+        assert calls[0].url.path == "/v0/agents/roamie-food-agent/1.1.0/resolved"
         assert calls[0].url.params["namespace"] == "roamie"
 
 
