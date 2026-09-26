@@ -66,7 +66,8 @@ async def test_roamie_model_uses_only_model_gateway_credential():
         await tokens.aclose()
 
 
-async def test_adk_mcp_session_discovers_and_calls_only_pinned_gateway_tool():
+@pytest.mark.parametrize("stateful", [False, True])
+async def test_adk_mcp_session_discovers_and_calls_only_pinned_gateway_tool(stateful):
     contract = json.loads(Path("contracts/roamie-travel.json").read_text())
     shape = {key: contract[key] for key in ("input", "output")}
     digest = hashlib.sha256(
@@ -79,6 +80,9 @@ async def test_adk_mcp_session_discovers_and_calls_only_pinned_gateway_tool():
         calls.append(body["method"])
         assert request.url.host == "mcp.tesserix.app"
         assert request.headers["authorization"] == "Bearer delegated"
+        if stateful and body["method"] != "initialize":
+            assert request.headers["Mcp-Session-Id"] == "travel-session"
+            assert request.headers["MCP-Protocol-Version"] == "2025-06-18"
         if body["method"] == "notifications/initialized":
             return httpx.Response(202)
         results = {
@@ -103,7 +107,11 @@ async def test_adk_mcp_session_discovers_and_calls_only_pinned_gateway_tool():
             },
         }
         return httpx.Response(
-            200, json={"jsonrpc": "2.0", "id": body["id"], "result": results[body["method"]]}
+            200,
+            headers={"Mcp-Session-Id": "travel-session"}
+            if stateful and body["method"] == "initialize"
+            else {},
+            json={"jsonrpc": "2.0", "id": body["id"], "result": results[body["method"]]},
         )
 
     async with asynccontextmanager(source_session)(
