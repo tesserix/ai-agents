@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime
 from typing import Annotated
 
 from pydantic import Field, SecretStr, ValidationError
+from tesserix_adk.a2a.discovery import PeerDiscoveryError
 from tesserix_adk.core import CredentialExpiredError, Principal, principal_scope
 
 from orchestrator_agent.config import WorkerEndpoint
@@ -22,6 +23,7 @@ from roamie_agents.contracts import (
     project,
 )
 from roamie_agents.delegation import DelegationError, Delegations, WorkerPayload
+from roamie_agents.discovery import RegistryWorkers
 from roamie_agents.exchange import CURRENCY_EXPONENTS, ExchangeQuote, ReferenceRate, compare_quotes
 from roamie_agents.runtime import TravelFailure, TravelService
 
@@ -64,10 +66,12 @@ class PersonalTripManager:
         supervisor: SupervisorService,
         identity_key: SecretStr,
         delegation_key: SecretStr,
+        discovery: RegistryWorkers | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         if len(identity_key.get_secret_value()) < 32:
             raise ValueError("manager identity key must contain at least 32 characters")
+        self._discovery = discovery
         self._workers = dict(workers)
         self._client = client
         self._supervisor = supervisor
@@ -111,6 +115,7 @@ class PersonalTripManager:
             ValidationError,
             DelegationError,
             CredentialExpiredError,
+            PeerDiscoveryError,
         ) as error:
             raise TravelFailure("manager_review_unavailable") from error
 
@@ -133,7 +138,11 @@ class PersonalTripManager:
         reference_rate: ReferenceRate | None,
         exchange_quotes: list[ExchangeQuote] | None,
     ) -> ManagedResponse:
-        endpoint = self._workers.get(specialist)
+        endpoint = (
+            await self._discovery.find(specialist)
+            if self._discovery is not None
+            else self._workers.get(specialist)
+        )
         if endpoint is None:
             raise TravelFailure("specialist_unavailable")
         if await revision_value(current_revision) != profile.revision:

@@ -4,14 +4,13 @@ import httpx
 from pydantic import Field, SecretStr
 from pydantic_settings import SettingsConfigDict
 
-from orchestrator_agent.config import WorkerEndpoint
 from orchestrator_agent.supervision import SupervisorService
 from orchestrator_agent.workers import A2AWorkerClient
 from roamie_agents.api import Source
 from roamie_agents.config import Settings
 from roamie_agents.connections import gateway_provider, source_session, workload_tokens
-from roamie_agents.contracts import Specialist
 from roamie_agents.definitions import manager_definition
+from roamie_agents.discovery import RegistryWorkers
 from roamie_agents.manager import PersonalTripManager
 from roamie_agents.manager_api import create_manager_app
 from roamie_agents.oauth import GatewayTransport
@@ -22,6 +21,7 @@ class ManagerSettings(Settings):
     model_config = SettingsConfigDict(env_prefix="ROAMIE_MANAGER_", frozen=True, extra="forbid")
     profile_signing_key: SecretStr = Field(min_length=32)
     identity_key: SecretStr = Field(min_length=32)
+    registry_origin: str = "http://agentregistry.agentregistry-system.svc.cluster.local:12121"
     a2a_gateway_origin: str = "http://agentgateway-mcp.agentgateway-system.svc.cluster.local:8082"
 
 
@@ -40,14 +40,14 @@ worker_client = A2AWorkerClient(
     timeout=50,
     client=worker_http,
 )
+registry_http = httpx.AsyncClient(timeout=2, trust_env=False, follow_redirects=False)
 manager = PersonalTripManager(
-    workers={
-        kind: WorkerEndpoint(
-            name=f"roamie-{kind.value}",
-            url=f"{settings.a2a_gateway_origin.rstrip('/')}/a2a/v1/roamie-{kind.value}",
-        )
-        for kind in Specialist
-    },
+    workers={},
+    discovery=RegistryWorkers(
+        registry_http,
+        registry_origin=settings.registry_origin,
+        gateway_origin=settings.a2a_gateway_origin,
+    ),
     client=worker_client,
     supervisor=SupervisorService(provider=provider, definition=manager_definition()),
     identity_key=settings.identity_key,
@@ -65,6 +65,7 @@ async def sources(token: str) -> AsyncIterator[Source]:
 
 
 async def close() -> None:
+    await registry_http.aclose()
     await worker_http.aclose()
     await provider.aclose()
     await tokens.aclose()

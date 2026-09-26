@@ -21,3 +21,11 @@ This changes publication only, adding one artifact and no request-path hops or
 customer traffic. Existing gateway deadlines and profile isolation remain in
 force. Dynamic runtime discovery and an authenticated app-to-manager smoke test
 are separate required validation steps, tracked in issue #49.
+
+The manager now uses ADK RegistryPeers to resolve each specialist from the
+versioned registry graph. A 60-second cache reduces registry reads; no stale
+answer is served after expiry. Registry calls have a two-second deadline and a
+256 KiB response ceiling. Missing artifacts, wrong namespaces or versions, and
+any URL outside the exact configured gateway route stop invocation. No profile
+data or workload credential is sent to the catalog. Static maps remain available
+only to isolated local callers; production manager startup selects discovery.
