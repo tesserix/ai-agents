@@ -92,9 +92,21 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 2
           persist-credentials: false
+      # Roamie tags are immutable, so a push republishes them only when it bumps them.
+      - name: Detect a Roamie release
+        id: roamie
+        env:
+          EVENT: ${{ github.event_name }}
+          REQUESTED: ${{ inputs.publish_roamie }}
+        run: |
+          release=false
+          if [ "${REQUESTED}" = "true" ]; then release=true; fi
+          if [ "${EVENT}" = "push" ] && ! git diff --quiet HEAD^ HEAD -- registry/roamie; then release=true; fi
+          echo "release=${release}" >> "${GITHUB_OUTPUT}"
       - name: Read released Roamie MCP manifest
-        if: github.event_name == 'push' || inputs.publish_roamie
+        if: steps.roamie.outputs.release == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tesserix/roamie
@@ -110,13 +122,14 @@ jobs:
       - name: Gate the publish on the evaluation suite
         run: uv run --no-sync python -m sre_agent.evaluation evals/sre-investigator.yaml
       - name: Pin Roamie registry to built images
+        if: steps.roamie.outputs.release == 'true'
         env:
           GHCR_READ_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: uv run --no-sync python scripts/pin_roamie_release.py
       - name: Publish reviewed Agent manifests
         env:
           REGISTRY_DEPLOY_KEY: ${{ secrets.AGENTIC_REGISTRY_DEPLOY_KEY }}
-          PUBLISH_ROAMIE: ${{ github.event_name == 'push' || inputs.publish_roamie }}
+          PUBLISH_ROAMIE: ${{ steps.roamie.outputs.release }}
           REGISTRY_ROAMIE_DEPLOY_KEY: ${{ secrets.AGENTIC_REGISTRY_ROAMIE_DEPLOY_KEY }}
           REGISTRY_SRE_DEPLOY_KEY: ${{ secrets.AGENTIC_REGISTRY_SRE_DEPLOY_KEY }}
           REGISTRY_PUBLISH_URL: https://publish-aregistry.tesserix.app/v0/apply
