@@ -17,6 +17,7 @@ from agent_telemetry import (
     bound_session,
     build_recorder,
     build_spans,
+    current_parent,
     current_session,
 )
 from kora_agents.definitions import DEFINITIONS
@@ -203,3 +204,63 @@ def test_settings_require_product_and_service(field: str) -> None:
     values.pop(field)
     with pytest.raises(ValueError, match=field):
         TelemetrySettings(**values)  # type: ignore[arg-type]
+
+
+KORA_TRACE = "0af7651916cd43dd8448eb211c80319c"
+KORA_SPAN = "b7ad6b7169203331"
+
+
+def test_a_valid_traceparent_nests_the_run_under_the_callers_span() -> None:
+    with bound_session("sess-1", traceparent=f"00-{KORA_TRACE}-{KORA_SPAN}-01"):
+        parent = current_parent()
+    assert parent is not None
+    root, *children = build_spans(run_fixture(), settings=SETTINGS, parent=parent)
+    assert root.context is not None and root.parent is not None
+    assert root.context.trace_id == int(KORA_TRACE, 16)
+    assert root.parent.span_id == int(KORA_SPAN, 16)
+    assert all(c.context and c.context.trace_id == int(KORA_TRACE, 16) for c in children)
+    assert all(c.parent is not None and c.parent.span_id == root.context.span_id for c in children)
+    attributes = dict(root.attributes or {})
+    assert "langfuse.trace.name" not in attributes
+    assert "langfuse.session.id" not in attributes
+
+
+def test_the_parented_run_keeps_its_derived_span_ids() -> None:
+    parent = _parse("00-" + KORA_TRACE + "-" + KORA_SPAN + "-01")
+    nested = build_spans(run_fixture(), settings=SETTINGS, parent=parent)
+    standalone = build_spans(run_fixture(), settings=SETTINGS)
+    assert [s.context.span_id for s in nested if s.context] == [
+        s.context.span_id for s in standalone if s.context
+    ]
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        None,
+        "",
+        "garbage",
+        f"00-{'0' * 32}-{KORA_SPAN}-01",
+        f"00-{KORA_TRACE}-{'0' * 16}-01",
+        f"ff-{KORA_TRACE}-{KORA_SPAN}-01",
+        f"00-{KORA_TRACE.upper()}-{KORA_SPAN}-01",
+        f"00-{KORA_TRACE}-{KORA_SPAN}-01-extra",
+    ],
+)
+def test_an_absent_or_invalid_traceparent_keeps_the_standalone_trace(header: str | None) -> None:
+    with bound_session("sess-1", traceparent=header):
+        assert current_parent() is None
+    root = build_spans(run_fixture(), settings=SETTINGS, session_id="sess-1")[0]
+    assert dict(root.attributes or {})["langfuse.session.id"] == "sess-1"
+    assert root.parent is None
+
+
+def test_the_parent_binding_is_scoped() -> None:
+    with bound_session("abc", traceparent=f"00-{KORA_TRACE}-{KORA_SPAN}-01"):
+        assert current_parent() is not None
+    assert current_parent() is None
+
+
+def _parse(header: str) -> Any:
+    with bound_session(None, traceparent=header):
+        return current_parent()

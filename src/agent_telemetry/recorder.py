@@ -9,7 +9,7 @@ import structlog
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
 
-from agent_telemetry.session import current_session
+from agent_telemetry.session import current_parent, current_session
 from agent_telemetry.settings import TelemetrySettings
 from agent_telemetry.spans import build_spans, resource_for
 
@@ -53,7 +53,11 @@ class LangfuseRecorder:
     def record(self, run: Run[Any]) -> None:
         try:
             for span in build_spans(
-                run, settings=self._settings, session_id=current_session(), resource=self._resource
+                run,
+                settings=self._settings,
+                session_id=current_session(),
+                parent=current_parent(),
+                resource=self._resource,
             ):
                 self._processor.on_end(span)
         except Exception as error:  # tracing is fail-open by design
