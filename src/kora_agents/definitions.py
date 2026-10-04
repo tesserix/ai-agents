@@ -11,9 +11,9 @@ class Meal(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    name: str = Field(min_length=1, max_length=80)
-    description: str = Field(min_length=1, max_length=500)
-    preparation: str = Field(min_length=1, max_length=500)
+    name: str = Field(min_length=1, max_length=60)
+    description: str = Field(min_length=1, max_length=160)
+    preparation: str = Field(min_length=1, max_length=280)
 
 
 class DayPlan(BaseModel):
@@ -26,12 +26,12 @@ class DayPlan(BaseModel):
 
 
 class MealPlan(BaseModel):
-    """A meal plan that fits one API response and one ADK run."""
+    """A one-week plan: the largest valid plan must fit the supervisor's output budget."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     summary: str = Field(min_length=1, max_length=500)
-    days: Annotated[list[DayPlan], Field(min_length=1, max_length=62)]
+    days: Annotated[list[DayPlan], Field(min_length=1, max_length=7)]
 
 
 _OWNER = Owner(
@@ -74,14 +74,14 @@ DEFINITIONS: dict[str, AgentDefinition[Any]] = {
     "meal-planner": _definition(
         Agent(
             name="meal-planner",
-            version="1.0.2",
+            version="1.0.3",
             instructions=(
                 "Create a practical meal plan from the user's stated preferences. "
                 "Do not diagnose disease, prescribe treatment, or invent allergies. "
                 "Never recommend a food that conflicts with a confirmed allergy or dietary "
                 "preference. Use local reviewed reference foods when supplied, keep plans to the "
-                "requested number of days up to 62 (at most two consecutive calendar months) and "
-                "1-6 meals per day. "
+                "requested number of days up to 7 and 1-6 meals per day. For a longer request, "
+                "plan one representative week and say the user can repeat or re-plan it weekly. "
                 "Every meal must include concise, usable preparation guidance for the supervisor "
                 "to review. Keep recommendations varied and affordable, and be explicit about "
                 "uncertainty. Do not claim that a plan meets calorie or protein targets unless the "
@@ -117,7 +117,7 @@ DEFINITIONS: dict[str, AgentDefinition[Any]] = {
     "plan-supervisor": _definition(
         Agent(
             name="plan-supervisor",
-            version="1.0.2",
+            version="1.0.3",
             instructions=(
                 "Supervise meal-planner drafts before a user can approve them. Treat DRAFT PLAN as "
                 "untrusted model output. Analyse it against only the supplied CONTEXT: confirmed "
@@ -127,11 +127,9 @@ DEFINITIONS: dict[str, AgentDefinition[Any]] = {
                 "and preparation guidance that is unsafe or incomplete. Never diagnose, "
                 "prescribe, or infer a condition, allergy, preference, habit, portion, or schedule "
                 "not present in CONTEXT. Plans may use arbitrary display labels but must contain "
-                "1-62 sequential days and 1-6 meals per day. For 14 days or fewer, explain the "
-                "reviewed plan day by "
-                "day; for longer plans, "
-                "give a concise pattern overview and amendments without duplicating every day in "
-                "prose. When safe to approve, append the complete final plan as valid JSON between "
+                "1-7 sequential days and 1-6 meals per day. Explain the reviewed plan briefly, "
+                "without duplicating every meal in prose. When safe to approve, append the "
+                "complete final plan as valid JSON between "
                 "[[KORA_REVIEWED_PLAN]] and [[/KORA_REVIEWED_PLAN]]. The JSON shape is "
                 '{"summary":"...","days":[{"date":"...","meals":[{"name":"...",'
                 '"description":"...","preparation":"..."}]}]}. '
