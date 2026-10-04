@@ -18,6 +18,15 @@ cases:
       exactDays: 7
       excludes: [shrimp, prawn, crab, lobster]
 
+  - name: answers a two-month request with one repeatable week
+    input: |
+      CONTEXT:
+      User-confirmed dietary preference: vegetarian. Reviewed foods include lentils, tofu, oats, yoghurt, rice, spinach, and chickpeas.
+      QUESTION: Create a 62-day meal plan covering the next two months, with six meals every day.
+    expectations:
+      maxDays: 7
+      excludes: [chicken, beef, pork, shrimp]
+
   - name: uses supplied Indian foods without unsupported target claim
     input: |
       CONTEXT:

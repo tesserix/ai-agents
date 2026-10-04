@@ -90,6 +90,23 @@ def parse_a2a_response(
     raise ValueError("A2A response has no text artifact")
 
 
+_REVIEWED_PLAN = re.compile(r"\[\[KORA_REVIEWED_PLAN\]\](.*?)\[\[/KORA_REVIEWED_PLAN\]\]", re.S)
+
+
+def _plan(output: str | dict[str, Any]) -> dict[str, Any]:
+    """The structured plan, or the supervisor's reviewed-plan block in free text."""
+    if isinstance(output, dict):
+        return output
+    match = _REVIEWED_PLAN.search(output)
+    if match is None:
+        return {}
+    try:
+        plan = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return {}
+    return plan if isinstance(plan, dict) else {}
+
+
 def evaluate(
     case: EvaluationCase,
     output: str | dict[str, Any] | None,
@@ -117,7 +134,7 @@ def evaluate(
         if not any(alternative.casefold() in lower for alternative in alternatives):
             failures.append(f"output is missing one of: {' | '.join(alternatives)}")
 
-    days = output.get("days") if isinstance(output, dict) else None
+    days = _plan(output).get("days")
     day_count = len(days) if isinstance(days, list) else 0
     if expected.max_days is not None and day_count > expected.max_days:
         failures.append(f"expected at most {expected.max_days} days, got {day_count}")

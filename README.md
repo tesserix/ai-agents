@@ -21,7 +21,8 @@ next one.
 The service publishes:
 
 - `nutrition-coach`: bounded free-text nutrition guidance;
-- `meal-planner`: validated structured meal plans of at most 62 days (two calendar months);
+- `meal-planner`: validated structured meal plans of at most 7 days, sized so the largest
+  valid plan fits one supervisor review;
 - `plan-supervisor`: an independent A2A review of planner drafts against the user's
   grounded health context, habits, constraints, and reviewed nutrition evidence.
 

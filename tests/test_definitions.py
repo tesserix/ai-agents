@@ -1,8 +1,9 @@
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from kora_agents.definitions import DEFINITIONS, MealPlan
+from kora_agents.definitions import DEFINITIONS, DayPlan, Meal, MealPlan
 
 
 def test_agents_are_reviewable_bounded_adk_definitions() -> None:
@@ -24,7 +25,10 @@ def test_agents_are_reviewable_bounded_adk_definitions() -> None:
         assert "Reviewed nutrition reference facts" in agent.instructions
         assert "per 100g" in agent.instructions
         assert "[cite:fact_id]" in agent.instructions
-        assert agent.version == "1.0.2"
+
+    assert DEFINITIONS["nutrition-coach"].agent.version == "1.0.2"
+    assert DEFINITIONS["meal-planner"].agent.version == "1.0.3"
+    assert DEFINITIONS["plan-supervisor"].agent.version == "1.0.3"
 
     assert DEFINITIONS["meal-planner"].agent.budget.max_seconds == 55.0
     assert DEFINITIONS["nutrition-coach"].agent.budget.max_seconds == 55.0
@@ -42,30 +46,51 @@ def test_agents_are_reviewable_bounded_adk_definitions() -> None:
     assert "arbitrary display labels" in supervisor.instructions
 
 
-def test_meal_plan_accepts_two_calendar_months_and_rejects_more() -> None:
-    too_many_days = [
-        {
-            "date": f"Day {day}",
-            "meals": [
-                {
-                    "name": "Breakfast",
-                    "description": "Oats",
-                    "preparation": "Simmer the oats until creamy.",
-                }
-            ],
-        }
-        for day in range(1, 64)
-    ]
+def _longest_meal_plan(days: int) -> dict[str, object]:
+    fields = MealPlan.model_fields
+    day_fields = DayPlan.model_fields
+    meal_fields = Meal.model_fields
 
-    accepted = MealPlan.model_validate({"summary": "Plan", "days": too_many_days[:62]})
-    assert len(accepted.days) == 62
+    def longest(model_fields: dict[str, Any], name: str) -> str:
+        return "x" * _max_length(model_fields[name])
 
-    try:
-        MealPlan.model_validate({"summary": "Plan", "days": too_many_days})
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("meal plans must be limited to 62 days")
+    meal = {name: longest(meal_fields, name) for name in ("name", "description", "preparation")}
+    return {
+        "summary": longest(fields, "summary"),
+        "days": [
+            {
+                "date": longest(day_fields, "date"),
+                "meals": [meal] * _max_length(day_fields["meals"]),
+            }
+            for _ in range(days)
+        ],
+    }
+
+
+def _max_length(field: Any) -> int:
+    return next(m.max_length for m in field.metadata if getattr(m, "max_length", None))
+
+
+def test_the_largest_valid_plan_fits_the_supervisors_output_budget() -> None:
+    max_days = _max_length(MealPlan.model_fields["days"])
+    plan = MealPlan.model_validate(_longest_meal_plan(max_days))
+
+    # JSON tokenises at roughly three characters per token; the supervisor needs the rest for prose.
+    plan_tokens = len(plan.model_dump_json()) / 3
+    supervisor_budget = DEFINITIONS["plan-supervisor"].agent.budget
+    assert supervisor_budget is not None
+    assert plan_tokens <= supervisor_budget.max_output_tokens * 2 / 3
+
+
+def test_meal_plan_accepts_one_week_and_rejects_more() -> None:
+    eight_days = _longest_meal_plan(8)["days"]
+    assert isinstance(eight_days, list)
+
+    accepted = MealPlan.model_validate({"summary": "Plan", "days": eight_days[:7]})
+    assert len(accepted.days) == 7
+
+    with pytest.raises(ValueError):
+        MealPlan.model_validate({"summary": "Plan", "days": eight_days})
 
 
 def test_meal_plan_accepts_display_day_labels() -> None:

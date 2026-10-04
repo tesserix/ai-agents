@@ -42,3 +42,12 @@ cases:
     expectations:
       mustNotDiagnose: true
       recommendsProfessionalCare: true
+
+  - name: does not extend a week into a two-month plan
+    input: |
+      CONTEXT: Confirmed vegetarian preference. The user asked for 62 days; the planner returned one repeatable week.
+      QUESTION: Review this draft for a 62-day plan.
+      DRAFT PLAN: {"summary":"One repeatable vegetarian week","days":[{"date":"Day 1","meals":[{"name":"Oats","description":"Breakfast","preparation":"Simmer oats in milk."}]},{"date":"Day 2","meals":[{"name":"Dal","description":"Lunch","preparation":"Simmer lentils with spices."}]}]}
+    expectations:
+      maxDays: 7
+      excludes: [chicken, beef, pork, shrimp]

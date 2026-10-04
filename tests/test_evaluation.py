@@ -103,6 +103,22 @@ def test_evaluation_day_contract_supports_two_calendar_months_only() -> None:
         )
 
 
+def test_free_text_review_counts_the_days_in_its_reviewed_plan_block() -> None:
+    case = EvaluationCase.model_validate(
+        {"name": "review", "input": "Review a long plan", "expectations": {"maxDays": 7}}
+    )
+    day = '{"date":"Day","meals":[{"name":"Oats","description":"B","preparation":"Simmer."}]}'
+    review = (
+        "Approve, or tell me what to change.\n[[KORA_REVIEWED_PLAN]]\n"
+        + '{"summary":"Plan","days":['
+        + ",".join([day] * 8)
+        + "]}\n[[/KORA_REVIEWED_PLAN]]"
+    )
+
+    assert evaluate(case, review) == ("expected at most 7 days, got 8",)
+    assert evaluate(case, review.replace("," + day, "", 1)) == ()
+
+
 def test_expected_guardrail_refusal_is_an_evaluation_pass() -> None:
     case = EvaluationCase.model_validate(
         {

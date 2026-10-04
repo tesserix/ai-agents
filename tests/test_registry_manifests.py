@@ -39,7 +39,7 @@ def test_registry_manifests_are_tenant_scoped_a2a_agents() -> None:
         assert len(skills[0]["description"]) >= 80
         assert "ground" in skills[0]["description"].lower()
         if name == "meal-planner":
-            assert "62 days" in skills[0]["description"]
+            assert "7 days" in skills[0]["description"]
         if name == "plan-supervisor":
             assert "health" in skills[0]["description"].lower()
             assert "habit" in skills[0]["description"].lower()
