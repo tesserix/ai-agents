@@ -175,7 +175,7 @@ def test_roamie_mcp_publication_uses_a_pinned_release_and_scoped_identity() -> N
     checkout = next(
         step for step in job["steps"] if step.get("name") == "Read released Roamie MCP manifest"
     )
-    assert checkout["if"] == "github.event_name == 'push' || inputs.publish_roamie"
+    assert checkout["if"] == "steps.roamie.outputs.release == 'true'"
     assert checkout["with"]["repository"] == "tesserix/roamie"
     assert checkout["with"]["ref"] == "4d80d899e9a4c77ff05732d51f37a19eed2a7f80"
     assert checkout["with"]["persist-credentials"] is False
@@ -200,10 +200,7 @@ def test_roamie_publication_runs_on_main_push_after_verification() -> None:
     publish = next(
         step for step in job["steps"] if step.get("name") == "Publish reviewed Agent manifests"
     )
-    assert (
-        publish["env"]["PUBLISH_ROAMIE"]
-        == "${{ github.event_name == 'push' || inputs.publish_roamie }}"
-    )
+    assert publish["env"]["PUBLISH_ROAMIE"] == "${{ steps.roamie.outputs.release }}"
 
 
 def test_roamie_dependencies_publish_before_agents():
@@ -214,3 +211,50 @@ def test_roamie_dependencies_publish_before_agents():
         ".roamie-release/services/travel-mcp/mcpserver.json "
         "registry/roamie/skills/*.yaml registry/roamie/*.yaml"
     ) in publish["run"]
+
+
+_TWO_COMMITS = """
+git init -q .
+mkdir -p registry/roamie "$(dirname "$CHANGED")"
+echo "tag: 1" > registry/roamie/a.yaml
+git add -A && git commit -qm base
+echo next > "$CHANGED"
+git add -A && git commit -qm change
+"""
+
+
+def _detect_roamie_release(tmp_path: Path, event: str, requested: str, changed: str) -> str:
+    job = yaml.safe_load(PUBLISH_WORKFLOW.read_text())["jobs"]["registry"]
+    detect = next(step for step in job["steps"] if step.get("id") == "roamie")
+    output = tmp_path / "output"
+    env = {
+        "CHANGED": changed,
+        "EVENT": event,
+        "REQUESTED": requested,
+        "GITHUB_OUTPUT": str(output),
+        "GIT_AUTHOR_NAME": "t",
+        "GIT_AUTHOR_EMAIL": "t@example.com",
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@example.com",
+        "PATH": "/usr/bin:/bin",
+    }
+    for script in (_TWO_COMMITS, detect["run"]):
+        subprocess.run(
+            ["/bin/sh", "-e"], input=script, text=True, cwd=tmp_path, env=env, check=True
+        )
+    return output.read_text().strip()
+
+
+def test_a_push_that_leaves_roamie_alone_does_not_republish_its_tags(tmp_path) -> None:
+    release = _detect_roamie_release(tmp_path, "push", "", "registry/meal-planner.yaml")
+    assert release == "release=false"
+
+
+def test_a_push_that_bumps_roamie_publishes_it(tmp_path) -> None:
+    release = _detect_roamie_release(tmp_path, "push", "", "registry/roamie/a.yaml")
+    assert release == "release=true"
+
+
+def test_a_dispatch_can_force_a_roamie_publish(tmp_path) -> None:
+    release = _detect_roamie_release(tmp_path, "workflow_dispatch", "true", "README.md")
+    assert release == "release=true"
