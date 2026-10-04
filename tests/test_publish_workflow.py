@@ -213,35 +213,32 @@ def test_roamie_dependencies_publish_before_agents():
     ) in publish["run"]
 
 
-_TWO_COMMITS = """
-git init -q .
-mkdir -p registry/roamie "$(dirname "$CHANGED")"
-echo "tag: 1" > registry/roamie/a.yaml
-git add -A && git commit -qm base
-echo next > "$CHANGED"
-git add -A && git commit -qm change
+_FAKE_GIT = """#!/bin/sh
+# Answers only the diff the step makes: exit 1 when the pushed change touched registry/roamie.
+[ "$*" = "diff --quiet HEAD^ HEAD -- registry/roamie" ] || exit 2
+case "$CHANGED" in registry/roamie/*) exit 1 ;; *) exit 0 ;; esac
 """
 
 
 def _detect_roamie_release(tmp_path: Path, event: str, requested: str, changed: str) -> str:
     job = yaml.safe_load(PUBLISH_WORKFLOW.read_text())["jobs"]["registry"]
     detect = next(step for step in job["steps"] if step.get("id") == "roamie")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    git = bin_dir / "git"
+    git.write_text(_FAKE_GIT)
+    git.chmod(0o755)
     output = tmp_path / "output"
     env = {
         "CHANGED": changed,
         "EVENT": event,
         "REQUESTED": requested,
         "GITHUB_OUTPUT": str(output),
-        "GIT_AUTHOR_NAME": "t",
-        "GIT_AUTHOR_EMAIL": "t@example.com",
-        "GIT_COMMITTER_NAME": "t",
-        "GIT_COMMITTER_EMAIL": "t@example.com",
-        "PATH": "/usr/bin:/bin",
+        "PATH": f"{bin_dir}:/usr/bin:/bin",
     }
-    for script in (_TWO_COMMITS, detect["run"]):
-        subprocess.run(
-            ["/bin/sh", "-e"], input=script, text=True, cwd=tmp_path, env=env, check=True
-        )
+    subprocess.run(
+        ["/bin/sh", "-e"], input=detect["run"], text=True, cwd=tmp_path, env=env, check=True
+    )
     return output.read_text().strip()
 
 
