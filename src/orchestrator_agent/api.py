@@ -141,7 +141,7 @@ def create_app(
         started = time.perf_counter()
         session_id = request.headers.get("X-Session-ID", "")[:128] or request_id
         try:
-            with bound_session(session_id):
+            with bound_session(session_id, traceparent=request.headers.get("traceparent")):
                 response = await call_next(request)
         except BaseException:
             logger.error(

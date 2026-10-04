@@ -78,10 +78,14 @@ def build_spans(
     settings: TelemetrySettings,
     session_id: str | None = None,
     resource: Resource | None = None,
+    parent: SpanContext | None = None,
 ) -> tuple[ReadableSpan, ...]:
-    """One agent root span per run, one child per model call, tool call or notable event."""
+    """One agent root span per run, one child per model call, tool call or notable event.
+
+    With a caller `parent` the run nests in that trace, which keeps its own name and session.
+    """
     resource = resource if resource is not None else resource_for(settings)
-    trace_id = _trace_id(run.id)
+    trace_id = parent.trace_id if parent is not None else _trace_id(run.id)
     root_context = _context(trace_id, _span_id(run.id, 0))
     start, end = _bounds(run)
     children: list[ReadableSpan] = []
@@ -107,9 +111,9 @@ def build_spans(
     root = ReadableSpan(
         name=run.agent_name,
         context=root_context,
-        parent=None,
+        parent=parent,
         resource=resource,
-        attributes=_root_attributes(run, settings, session_id),
+        attributes=_root_attributes(run, settings, session_id, parented=parent is not None),
         kind=SpanKind.SERVER,
         status=_status("ERROR" if run.state.value != "completed" else "DEFAULT", run.state.value),
         start_time=start,
@@ -120,7 +124,7 @@ def build_spans(
 
 
 def _root_attributes(
-    run: Run[Any], settings: TelemetrySettings, session_id: str | None
+    run: Run[Any], settings: TelemetrySettings, session_id: str | None, *, parented: bool
 ) -> dict[str, Any]:
     tags = [settings.product, run.agent_name, settings.service_name]
     attributes: dict[str, Any] = {
@@ -152,7 +156,9 @@ def _root_attributes(
     }
     if settings.release:
         attributes["langfuse.release"] = settings.release
-    if session_id:
+    if parented:
+        del attributes["langfuse.trace.name"]
+    elif session_id:
         attributes["langfuse.session.id"] = session_id
     if run.user:
         attributes["langfuse.user.id"] = run.user
