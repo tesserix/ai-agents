@@ -175,7 +175,7 @@ def test_roamie_mcp_publication_uses_a_pinned_release_and_scoped_identity() -> N
     checkout = next(
         step for step in job["steps"] if step.get("name") == "Read released Roamie MCP manifest"
     )
-    assert checkout["if"] == "steps.roamie.outputs.release == 'true'"
+    assert checkout["if"] == "needs.roamie-release.outputs.release == 'true'"
     assert checkout["with"]["repository"] == "tesserix/roamie"
     assert checkout["with"]["ref"] == "4d80d899e9a4c77ff05732d51f37a19eed2a7f80"
     assert checkout["with"]["persist-credentials"] is False
@@ -195,12 +195,12 @@ def test_roamie_publication_runs_on_main_push_after_verification() -> None:
         "github.ref == 'refs/heads/main' && "
         "(github.event_name == 'push' || github.event_name == 'workflow_dispatch')"
     )
-    assert set(job["needs"]) == {"verify", "image"}
+    assert set(job["needs"]) == {"verify", "image", "roamie-release"}
     assert "github.ref == 'refs/heads/main'" in job["if"]
     publish = next(
         step for step in job["steps"] if step.get("name") == "Publish reviewed Agent manifests"
     )
-    assert publish["env"]["PUBLISH_ROAMIE"] == "${{ steps.roamie.outputs.release }}"
+    assert publish["env"]["PUBLISH_ROAMIE"] == "${{ needs.roamie-release.outputs.release }}"
 
 
 def test_roamie_dependencies_publish_before_agents():
@@ -220,26 +220,42 @@ case "$CHANGED" in registry/roamie/*) exit 1 ;; *) exit 0 ;; esac
 """
 
 
-def _detect_roamie_release(tmp_path: Path, event: str, requested: str, changed: str) -> str:
-    job = yaml.safe_load(PUBLISH_WORKFLOW.read_text())["jobs"]["registry"]
+def _run_roamie_detection(
+    tmp_path: Path, event: str, requested: str, git: str | None, changed: str = ""
+) -> tuple[int, str]:
+    job = yaml.safe_load(PUBLISH_WORKFLOW.read_text())["jobs"]["roamie-release"]
     detect = next(step for step in job["steps"] if step.get("id") == "roamie")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    git = bin_dir / "git"
-    git.write_text(_FAKE_GIT)
-    git.chmod(0o755)
+    if git is not None:
+        fake = bin_dir / "git"
+        fake.write_text(git)
+        fake.chmod(0o755)
     output = tmp_path / "output"
+    output.touch()
     env = {
         "CHANGED": changed,
         "EVENT": event,
         "REQUESTED": requested,
         "GITHUB_OUTPUT": str(output),
-        "PATH": f"{bin_dir}:/usr/bin:/bin",
+        "PATH": str(bin_dir),
     }
-    subprocess.run(
-        ["/bin/sh", "-e"], input=detect["run"], text=True, cwd=tmp_path, env=env, check=True
+    result = subprocess.run(
+        ["/bin/sh", "-e"],
+        input=detect["run"],
+        text=True,
+        cwd=tmp_path,
+        env=env,
+        check=False,
+        capture_output=True,
     )
-    return output.read_text().strip()
+    return result.returncode, output.read_text().strip()
+
+
+def _detect_roamie_release(tmp_path: Path, event: str, requested: str, changed: str) -> str:
+    code, output = _run_roamie_detection(tmp_path, event, requested, _FAKE_GIT, changed)
+    assert code == 0
+    return output
 
 
 def test_a_push_that_leaves_roamie_alone_does_not_republish_its_tags(tmp_path) -> None:
@@ -255,3 +271,23 @@ def test_a_push_that_bumps_roamie_publishes_it(tmp_path) -> None:
 def test_a_dispatch_can_force_a_roamie_publish(tmp_path) -> None:
     release = _detect_roamie_release(tmp_path, "workflow_dispatch", "true", "README.md")
     assert release == "release=true"
+
+
+def test_a_push_fails_rather_than_republishing_when_git_is_missing(tmp_path) -> None:
+    code, output = _run_roamie_detection(tmp_path, "push", "", git=None)
+    assert code != 0
+    assert output == ""
+
+
+def test_a_push_fails_rather_than_republishing_when_git_errors(tmp_path) -> None:
+    code, output = _run_roamie_detection(tmp_path, "push", "", git="#!/bin/sh\nexit 128\n")
+    assert code != 0
+    assert output == ""
+
+
+def test_roamie_release_is_detected_on_a_runner_that_has_git() -> None:
+    job = yaml.safe_load(PUBLISH_WORKFLOW.read_text())["jobs"]["roamie-release"]
+    assert "container" not in job, "the ADK base image has no git"
+    checkout = next(step for step in job["steps"] if "actions/checkout" in step.get("uses", ""))
+    assert checkout["with"]["fetch-depth"] == 2
+    assert job["outputs"]["release"] == "${{ steps.roamie.outputs.release }}"
