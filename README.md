@@ -14,7 +14,8 @@ Three services live here: the Kora agents (`kora_agents`), the SRE
 investigator (`sre_agent`), and the global supervisor/orchestrator pair
 (`orchestrator_agent`), which belongs to the `tesserix` tenant and to no product.
 `docs/building-an-agent.md` is the step-by-step path the SRE agent took, for the
-next one.
+next one. `docs/agent-platform-primitives.md` maps each platform primitive to
+where it lives, how Roamie uses it, and the remaining gaps.
 
 ## Kora agents
 
