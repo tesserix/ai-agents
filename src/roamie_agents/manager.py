@@ -17,6 +17,8 @@ from orchestrator_agent.workers import A2AWorkerClient, WorkerCallError
 from roamie_agents.base import Contract
 from roamie_agents.contracts import (
     Evidence,
+    PlanningQuestion,
+    PlanningTopic,
     RecommendationRequest,
     Specialist,
     TravelResponse,
@@ -55,6 +57,100 @@ def planning_dates(profile: Profile, request: RecommendationRequest) -> dict[str
     ):
         raise TravelFailure("dates_outside_trip")
     return {"start_date": start, "end_date": end}
+
+
+def effective_request(profile: Profile, request: RecommendationRequest) -> RecommendationRequest:
+    effective = request.model_dump()
+    effective.update(
+        allergies=tuple(sorted(set(profile.allergies) | set(request.allergies))),
+        diets=tuple(sorted(set(profile.diets) | set(request.diets))),
+        currency=profile.currency,
+        accessibility_requirements=tuple(
+            sorted(
+                set(profile.accessibility_requirements) | set(request.accessibility_requirements)
+            )
+        ),
+        preferences=tuple(dict.fromkeys((*profile.preferences, *request.preferences))),
+        language=profile.language,
+        **planning_dates(profile, request),
+        photo_consent=profile.photo_consent and request.photo_consent,
+    )
+    if request.currency != profile.currency and request.budget_minor is not None:
+        raise TravelFailure("budget_currency_mismatch")
+    budgets = [value for value in (profile.budget_minor, request.budget_minor) if value is not None]
+    effective["budget_minor"] = min(budgets) if budgets else None
+    if set(request.photo_ids) - set(profile.selected_photo_ids):
+        raise TravelFailure("photo_not_authorized")
+    return RecommendationRequest.model_validate(effective)
+
+
+class PlanningDetailsRequired(TravelFailure):
+    def __init__(self, questions: tuple[PlanningQuestion, ...]) -> None:
+        super().__init__("planning_details_required")
+        self.questions = questions
+
+
+PACE_WORDS = ("relaxed", "leisurely", "slow", "moderate", "packed", "busy", "fast")
+
+
+def require_planning_details(request: RecommendationRequest) -> tuple[PlanningQuestion, ...]:
+    asked: list[PlanningQuestion] = []
+
+    def ask(topic: PlanningTopic, question: str, reason: str, *, required: bool = True) -> None:
+        asked.append(
+            PlanningQuestion(topic=topic, question=question, reason=reason, required=required)
+        )
+
+    if not request.destination.strip() and not request.stays:
+        ask(
+            "destination",
+            "Where would you like to go, such as a city or region?",
+            "Every stop is chosen from places at your destination.",
+        )
+    if request.start_date is None or request.end_date is None:
+        ask(
+            "dates",
+            "Which dates are you travelling, from arrival to departure?",
+            "Each day of the itinerary is planned for a specific date.",
+        )
+    else:
+        days = (request.end_date - request.start_date).days + 1
+        covered = sum(stay.days for stay in request.stays)
+        if days > 14:
+            ask(
+                "trip_length",
+                f"Your trip is {days} days; which 14 days should I plan first?",
+                "One itinerary covers at most 14 days.",
+            )
+        elif request.stays and covered != days:
+            ask(
+                "stays",
+                f"Your stops cover {covered} of {days} days; how many days in each place?",
+                "Each day needs a confirmed base so stops stay in the right place.",
+            )
+    if request.budget_minor is None:
+        ask(
+            "budget",
+            f"Roughly what is your total budget in {request.currency}, excluding flights?",
+            "The budget, balanced and premium plans are sized to fit within it.",
+        )
+    if not request.preferences:
+        ask(
+            "interests",
+            "What do you enjoy most: food, history, nature, art, nightlife or shopping?",
+            "Interests decide which stops make each day worthwhile.",
+            required=False,
+        )
+    if not any(word in item.casefold() for item in request.preferences for word in PACE_WORDS):
+        ask(
+            "pace",
+            "Do you prefer a relaxed, moderate or packed pace each day?",
+            "Pace sets how many stops fit comfortably in a day.",
+            required=False,
+        )
+    if any(question.required for question in asked):
+        raise PlanningDetailsRequired(tuple(asked))
+    return tuple(asked)
 
 
 class ManagedResponse(Contract):
@@ -220,31 +316,8 @@ class PersonalTripManager:
             raise TravelFailure("specialist_unavailable")
         if await revision_value(current_revision) != profile.revision:
             raise TravelFailure("profile_changed")
-        effective = request.model_dump()
-        effective.update(
-            allergies=tuple(sorted(set(profile.allergies) | set(request.allergies))),
-            diets=tuple(sorted(set(profile.diets) | set(request.diets))),
-            currency=profile.currency,
-            accessibility_requirements=tuple(
-                sorted(
-                    set(profile.accessibility_requirements)
-                    | set(request.accessibility_requirements)
-                )
-            ),
-            preferences=tuple(dict.fromkeys((*profile.preferences, *request.preferences))),
-            language=profile.language,
-            **planning_dates(profile, request),
-            photo_consent=profile.photo_consent and request.photo_consent,
-        )
-        if request.currency != profile.currency and request.budget_minor is not None:
-            raise TravelFailure("budget_currency_mismatch")
-        budgets = [
-            value for value in (profile.budget_minor, request.budget_minor) if value is not None
-        ]
-        effective["budget_minor"] = min(budgets) if budgets else None
-        if set(request.photo_ids) - set(profile.selected_photo_ids):
-            raise TravelFailure("photo_not_authorized")
-        bounded = RecommendationRequest.model_validate(effective)
+        bounded = effective_request(profile, request)
+        questions = require_planning_details(bounded) if bounded.plan_options else ()
         advisories: list[TravelResponse] = []
         candidates = [
             fact
@@ -386,6 +459,7 @@ class PersonalTripManager:
                     ]
                     or None,
                     evidence_destinations={fact.id: fact.destination for fact in candidates},
+                    locations={fact.id: fact.location for fact in candidates if fact.location},
                 )
             except ValueError as error:
                 raise TravelFailure("invalid_trip_options") from error
@@ -436,6 +510,7 @@ class PersonalTripManager:
                 raise TravelFailure("evidence_expired")
         clean = response.model_copy(
             update={
+                "questions": questions,
                 "limitations": (
                     "Reviewed against your trip preferences and available provider evidence.",
                     "Prices, availability and travel times may change; confirm before visiting.",
@@ -454,7 +529,7 @@ class PersonalTripManager:
                         for limitation in advisory.limitations
                     ),
                     *response.limitations,
-                )
+                ),
             }
         )
         return ManagedResponse(

@@ -27,6 +27,19 @@
       "PlanningStay": {
         "additionalProperties": false,
         "properties": {
+          "country": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Country"
+          },
           "days": {
             "maximum": 14,
             "minimum": 1,
@@ -38,6 +51,17 @@
             "minLength": 1,
             "title": "Destination",
             "type": "string"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Location"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [
@@ -840,6 +864,19 @@
         "PlanningStay": {
           "additionalProperties": false,
           "properties": {
+            "country": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Z]{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Country"
+            },
             "days": {
               "maximum": 14,
               "minimum": 1,
@@ -851,6 +888,17 @@
               "minLength": 1,
               "title": "Destination",
               "type": "string"
+            },
+            "origin": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Location"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
             }
           },
           "required": [
@@ -1432,7 +1480,6 @@
                   "type": "number"
                 },
                 {
-                  "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,25}0*$)\\d{0,12}\\.\\d{0,12}0*$)",
                   "type": "string"
                 }
               ],
@@ -1515,7 +1562,6 @@
                   "type": "number"
                 },
                 {
-                  "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,25}0*$)\\d{0,12}\\.\\d{0,12}0*$)",
                   "type": "string"
                 }
               ],

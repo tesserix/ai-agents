@@ -15,7 +15,15 @@ from roamie_agents.api import SourceFactory
 from roamie_agents.base import Contract
 from roamie_agents.contracts import RecommendationRequest, Specialist
 from roamie_agents.diagnostics import record_failure
-from roamie_agents.manager import ManagedResponse, PersonalTripManager, Profile, planning_dates
+from roamie_agents.manager import (
+    ManagedResponse,
+    PersonalTripManager,
+    PlanningDetailsRequired,
+    Profile,
+    effective_request,
+    planning_dates,
+    require_planning_details,
+)
 from roamie_agents.runtime import TravelFailure
 
 
@@ -115,6 +123,8 @@ def create_manager_app(
         try:
             if await profile_authority(snapshot.profile) != snapshot.profile.revision:
                 raise TravelFailure("profile_changed")
+            if snapshot.request.plan_options:
+                require_planning_details(effective_request(snapshot.profile, snapshot.request))
             async with asynccontextmanager(sources)(gateway_token) as source:
                 search_request = snapshot.request.model_copy(
                     update=planning_dates(snapshot.profile, snapshot.request)
@@ -145,6 +155,14 @@ def create_manager_app(
             if clock() >= snapshot.expires_at:
                 raise HTTPException(401, "profile snapshot expired during review")
             return result
+        except PlanningDetailsRequired as error:
+            raise HTTPException(
+                422,
+                {
+                    "reason": str(error),
+                    "questions": [item.model_dump(mode="json") for item in error.questions],
+                },
+            ) from error
         except (TravelFailure, TimeoutError) as error:
             record_failure("manager", error)
             raise HTTPException(503, "trip manager could not validate this response") from error

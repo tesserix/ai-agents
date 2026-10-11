@@ -140,3 +140,59 @@ async def test_provider_failure_returns_unavailable_without_exposing_error(reaso
         assert len(failure["request_id"]) == 32
         assert "sensitive" not in json.dumps(logs)
         assert "fixture" not in json.dumps(logs)
+
+
+async def test_incomplete_trip_plan_returns_questions_without_searching_providers():
+    searched = []
+
+    class RecordingSource:
+        async def search(self, specialist, request):
+            searched.append(specialist)
+            return EvidenceBatch(status="unavailable")
+
+    async def sources(token):
+        yield RecordingSource()
+
+    async with httpx.AsyncClient() as worker_http:
+        manager = PersonalTripManager(
+            workers={},
+            client=A2AWorkerClient(api_key=SecretStr("a" * 32), timeout=5, client=worker_http),
+            supervisor=SupervisorService(provider=ScriptedProvider()),
+            delegation_key=SecretStr("d" * 32),
+            identity_key=SecretStr("c" * 32),
+        )
+        app = create_manager_app(
+            manager=manager,
+            sources=sources,
+            api_key=SecretStr("a" * 32),
+            profile_authority=authority,
+            profile_signing_key=SecretStr("b" * 32),
+            clock=lambda: 1000,
+        )
+        raw = snapshot(
+            specialist="trip-planner",
+            request={
+                "prompt": "Plan a week in Japan",
+                "plan_options": True,
+                "destination": "Japan",
+            },
+        )
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            result = await client.post(
+                "/v1/trip-manager",
+                content=raw,
+                headers={
+                    "Authorization": "Bearer " + "a" * 32,
+                    "X-Roamie-Gateway-Token": "fixture",
+                    "X-Roamie-Profile-Signature": hmac.new(
+                        b"b" * 32, raw, hashlib.sha256
+                    ).hexdigest(),
+                },
+            )
+    assert result.status_code == 422
+    detail = result.json()["detail"]
+    assert detail["reason"] == "planning_details_required"
+    assert [q["topic"] for q in detail["questions"] if q["required"]] == ["dates", "budget"]
+    assert searched == []

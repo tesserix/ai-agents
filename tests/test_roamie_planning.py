@@ -210,3 +210,50 @@ async def test_adjacent_proposed_visits_receive_transit_buffer_before_review():
         "11:15",
         "12:30",
     ]
+
+
+@pytest.mark.parametrize(
+    "latitude,expected",
+    [(21.0325, "11:15"), (21.1184, "11:40"), (21.9, "12:30")],
+    ids=["neighbouring", "across-town", "capped-day-trip"],
+)
+async def test_transit_buffer_grows_with_distance_between_stops(latitude, expected):
+    import json
+
+    from roamie_agents.base import Location
+
+    museum = evidence().model_copy(update={"location": Location(latitude=21.0285, longitude=105.8)})
+    lake = museum.model_copy(
+        update={"id": "lake", "location": Location(latitude=latitude, longitude=105.8)}
+    )
+    output = proposal()
+    for option in output["options"]:
+        option["days"][0]["stops"].append(
+            {"evidence_id": "lake", "time": "11:00", "minutes": 30, "note": "Lakeside walk"}
+        )
+    result = await TravelService(
+        provider=ScriptedProvider(ModelResponse(content=json.dumps(output))), clock=lambda: NOW
+    ).recommend(Specialist.TRIP, request(), facts=[museum, lake])
+    assert [stop.time for stop in result.trip_options[0].days[0].stops] == ["10:00", expected]
+
+
+def test_validation_rejects_plans_that_skip_distance_transit():
+    from roamie_agents.base import Location
+    from roamie_agents.planning import PlanSelection, validate_options
+
+    value = proposal()
+    value["options"][0]["days"][0]["stops"].append(
+        {"evidence_id": "lake", "time": "11:15", "minutes": 30, "note": "Lakeside walk"}
+    )
+    with pytest.raises(ValueError, match="invalid_planning_stop"):
+        validate_options(
+            PlanSelection.model_validate(value).options,
+            start=NOW.date().replace(day=1, month=10),
+            end=NOW.date().replace(day=1, month=10),
+            evidence_ids={"museum", "lake"},
+            ceiling=None,
+            locations={
+                "museum": Location(latitude=21.0285, longitude=105.8),
+                "lake": Location(latitude=21.1184, longitude=105.8),
+            },
+        )
