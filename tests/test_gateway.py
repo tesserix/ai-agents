@@ -123,3 +123,17 @@ async def test_provider_factory_caches_each_route_and_closes_it() -> None:
     assert structured is not conversation
     assert structured.name == "solo-agentgateway"
     await factory.aclose()
+
+
+async def test_gateway_preserves_user_attribution_without_leaking_between_calls() -> None:
+    recording = RecordingTransport()
+    transport = GatewayHeadersTransport(recording, capability="coach", context_kind="conversation")
+    async with httpx.AsyncClient(transport=transport) as client:
+        with delegated_end_user_token(
+            "Bearer verified-user", user_id="11111111-1111-4111-8111-111111111111"
+        ):
+            await client.post("https://gateway.test/v1/chat/completions", json={})
+        await client.post("https://gateway.test/v1/chat/completions", json={})
+    assert recording.requests[0].headers["x-kora-user-id"] == "11111111-1111-4111-8111-111111111111"
+    assert recording.requests[0].headers["x-kora-ai-service"] == "kora-ai-agents"
+    assert "x-kora-user-id" not in recording.requests[1].headers

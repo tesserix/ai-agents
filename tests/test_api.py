@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from kora_agents.api import create_app
 from kora_agents.config import Settings
 from kora_agents.execution import ExecutionResult
-from kora_agents.identity import current_end_user_token
+from kora_agents.identity import current_end_user_token, current_user_id
 from kora_agents.runtime import AgentNotFoundError, ExecutionFailedError
 
 
@@ -13,10 +13,12 @@ class FakeAgentService:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str, str]] = []
         self.end_user_tokens: list[str | None] = []
+        self.user_ids: list[str | None] = []
 
     async def run(self, agent_name: str, prompt: str, *, tenant: str) -> ExecutionResult:
         self.calls.append((agent_name, prompt, tenant))
         self.end_user_tokens.append(current_end_user_token())
+        self.user_ids.append(current_user_id())
         return ExecutionResult(
             run_id="run-1",
             agent_name=agent_name,
@@ -256,3 +258,18 @@ def test_failed_run_logs_why_it_failed(capsys) -> None:
     logged = capsys.readouterr()
     assert "agent_execution_failed" in logged.out
     assert "guardrail_blocked" in logged.out
+
+
+def test_delegated_user_id_is_scoped_to_one_authenticated_request() -> None:
+    app, service = client()
+    for extra in (
+        {"X-Kora-Delegated-User-Id": "11111111-1111-4111-8111-111111111111"},
+        {"X-Kora-User-Id": "untrusted"},
+    ):
+        response = app.post(
+            "/v1/agents/nutrition-coach/runs",
+            headers={"Authorization": "Bearer service-secret", **extra},
+            json={"prompt": "Plan lunch"},
+        )
+        assert response.status_code == 200
+    assert service.user_ids == ["11111111-1111-4111-8111-111111111111", None]

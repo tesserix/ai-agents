@@ -217,10 +217,13 @@ def create_app(
             str | None,
             Header(alias=INBOUND_DELEGATED_IDENTITY_HEADER, max_length=8192),
         ] = None,
+        user_id: Annotated[
+            str | None, Header(alias="X-Kora-Delegated-User-Id", pattern=r"^[0-9a-fA-F-]{36}$")
+        ] = None,
     ) -> RunResponse:
         if len(body.prompt) > settings.max_prompt_chars:
             raise HTTPException(status_code=422, detail="prompt exceeds configured limit")
-        with delegated_end_user_token(end_user_token):
+        with delegated_end_user_token(end_user_token, user_id=user_id):
             result = await service.run(agent_name, body.prompt, tenant=settings.tenant_id)
         return _response(result)
 
@@ -232,11 +235,14 @@ def create_app(
             str | None,
             Header(alias=INBOUND_DELEGATED_IDENTITY_HEADER, max_length=8192),
         ] = None,
+        user_id: Annotated[
+            str | None, Header(alias="X-Kora-Delegated-User-Id", pattern=r"^[0-9a-fA-F-]{36}$")
+        ] = None,
     ) -> dict[str, object]:
         prompt = "\n".join(part.text for part in body.params.message.parts)
         if len(prompt) > settings.max_prompt_chars:
             raise HTTPException(status_code=422, detail="prompt exceeds configured limit")
-        with delegated_end_user_token(end_user_token):
+        with delegated_end_user_token(end_user_token, user_id=user_id):
             result = await service.run(agent_name, prompt, tenant=settings.tenant_id)
         output = result.output if isinstance(result.output, str) else json.dumps(result.output)
         return {
