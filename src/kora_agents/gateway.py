@@ -10,6 +10,7 @@ from tesserix_adk.models.providers import OpenAICompatibleProvider
 from kora_agents.config import Settings
 from kora_agents.identity import (
     MODEL_GATEWAY_END_USER_AUTH_HEADER,
+    current_agent_execution,
     current_end_user_token,
     current_user_id,
 )
@@ -30,6 +31,12 @@ class GatewayHeadersTransport(httpx.AsyncBaseTransport):
         self._context_kind = context_kind
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        agent_headers = ("x-kora-agent-id", "x-kora-agent-version", "x-kora-agent-run-id")
+        for header in agent_headers:
+            request.headers.pop(header, None)
+        if execution := current_agent_execution():
+            for header, value in zip(agent_headers, execution, strict=True):
+                request.headers[header] = value
         request.headers["x-kora-ai-service"] = "kora-ai-agents"
         request.headers.pop("x-kora-user-id", None)
         if user_id := current_user_id():

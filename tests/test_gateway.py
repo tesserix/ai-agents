@@ -137,3 +137,27 @@ async def test_gateway_preserves_user_attribution_without_leaking_between_calls(
     assert recording.requests[0].headers["x-kora-user-id"] == "11111111-1111-4111-8111-111111111111"
     assert recording.requests[0].headers["x-kora-ai-service"] == "kora-ai-agents"
     assert "x-kora-user-id" not in recording.requests[1].headers
+
+
+async def test_runtime_stamps_agent_and_run_identity_on_model_calls(monkeypatch) -> None:
+    from kora_agents.runtime import RuntimeAgentService
+
+    recording = RecordingTransport()
+    monkeypatch.setattr(httpx, "AsyncHTTPTransport", lambda: recording)
+    factory = GatewayProviderFactory(Settings(api_key="service-key", gateway_api_key="gateway-key"))
+    service = RuntimeAgentService(definitions=DEFINITIONS, providers=factory)
+    try:
+        first = await service.run("nutrition-coach", "Lunch ideas?", tenant="kora")
+        second = await service.run("nutrition-coach", "Dinner ideas?", tenant="kora")
+        await factory.for_definition(DEFINITIONS["nutrition-coach"]).complete(model_request())
+    finally:
+        await factory.aclose()
+    for request, result in zip(recording.requests[:2], [first, second], strict=True):
+        assert request.headers["x-kora-agent-id"] == "nutrition-coach"
+        assert (
+            request.headers["x-kora-agent-version"] == DEFINITIONS["nutrition-coach"].agent.version
+        )
+        assert request.headers["x-kora-agent-run-id"] == result.run_id
+    assert first.run_id != second.run_id
+    assert "x-kora-agent-id" not in recording.requests[2].headers
+    assert "x-kora-agent-run-id" not in recording.requests[2].headers

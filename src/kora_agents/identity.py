@@ -31,3 +31,19 @@ def current_end_user_token() -> str | None:
 
 def current_user_id() -> str | None:
     return _user_id.get()
+
+
+_agent: ContextVar[tuple[str, str, str] | None] = ContextVar("kora_agent", default=None)
+
+
+@contextmanager
+def agent_execution(agent_id: str, version: str, run_id: str) -> Iterator[None]:
+    reset = _agent.set((agent_id, version, run_id))
+    try:
+        yield
+    finally:
+        _agent.reset(reset)
+
+
+def current_agent_execution() -> tuple[str, str, str] | None:
+    return _agent.get()

@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
+from uuid import uuid4
 
 from pydantic import BaseModel
 from tesserix_adk.core import AgentDefinition, Message, ModelProvider, TextPart
@@ -10,6 +11,7 @@ from tesserix_adk.runtime import AgentRunner
 
 from agent_telemetry import NoopRecorder, Recorder
 from kora_agents.execution import ExecutionResult
+from kora_agents.identity import agent_execution
 from kora_agents.safety import MedicalSafetyGuard
 
 
@@ -63,7 +65,9 @@ class RuntimeAgentService:
                 "medical_safety": MedicalSafetyGuard(),
             },
         )
-        run = await runner.run(definition, prompt, tenant=tenant)
+        run_id = str(uuid4())
+        with agent_execution(definition.agent.name, definition.agent.version, run_id):
+            run = await runner.run(definition, prompt, tenant=tenant, run_id=run_id)
         self._recorder.record(run)
         if run.state.value != "completed":
             raise ExecutionFailedError(run.state.value)
