@@ -273,3 +273,125 @@ def test_delegated_user_id_is_scoped_to_one_authenticated_request() -> None:
         )
         assert response.status_code == 200
     assert service.user_ids == ["11111111-1111-4111-8111-111111111111", None]
+
+
+def test_validation_error_does_not_echo_private_prompt_or_delegated_token() -> None:
+    app, service = client()
+    for payload, headers in [
+        ({"prompt": "private-health-fact" * 1000}, {}),
+        ({"prompt": "hello"}, {"X-Kora-Delegated-User-Id": "private-user-token"}),
+    ]:
+        response = app.post(
+            "/v1/agents/nutrition-coach/runs",
+            json=payload,
+            headers={"Authorization": "Bearer service-secret", **headers},
+        )
+        assert response.status_code == 422
+        assert "private-health-fact" not in response.text
+        assert "private-user-token" not in response.text
+    assert service.calls == []
+
+
+def test_request_body_is_bounded_before_validation() -> None:
+    app, service = client()
+    response = app.post(
+        "/v1/agents/nutrition-coach/runs",
+        content=b" " * (300_000),
+        headers={"Authorization": "Bearer service-secret", "Content-Type": "application/json"},
+    )
+    assert response.status_code == 413
+    assert service.calls == []
+
+
+async def test_chunked_request_cannot_bypass_body_limit() -> None:
+    import httpx
+
+    app, service = client()
+
+    async def chunks():
+        yield b" " * 140_000
+        yield b" " * 140_000
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app.app), base_url="http://test"
+    ) as http:
+        response = await http.post(
+            "/a2a/v1/nutrition-coach",
+            content=chunks(),
+            headers={"Authorization": "Bearer service-secret", "Content-Type": "application/json"},
+        )
+    assert response.status_code == 413
+    assert service.calls == []
+
+
+def test_non_ascii_bearer_is_rejected_without_server_error() -> None:
+    app, service = client()
+    response = app.get("/v1/agents", headers={b"Authorization": b"Bearer \xff"})
+    assert response.status_code == 401
+    assert service.calls == []
+
+
+def test_empty_service_credentials_fail_startup_without_echoing_secrets() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    for key in ["api_key", "gateway_api_key"]:
+        values = {"api_key": "private-secret", "gateway_api_key": "private-secret", key: " "}
+        with pytest.raises(ValidationError) as error:
+            Settings(**values)
+        assert "private-secret" not in str(error.value)
+
+
+def test_a2a_never_exposes_a_coach_draft_that_failed_fresh_review() -> None:
+    from tesserix_adk.core import ModelCapabilities
+    from tesserix_adk.runtime import ModelResponse
+    from tesserix_adk.testing import ScriptedProvider
+
+    from kora_agents.definitions import DEFINITIONS
+    from kora_agents.runtime import RuntimeAgentService, StaticProviderFactory
+
+    service = RuntimeAgentService(
+        definitions=DEFINITIONS,
+        providers=StaticProviderFactory(
+            ScriptedProvider(
+                ModelResponse(content="The fish curry is exactly 650 calories."),
+                ModelResponse(
+                    content='{"supported":false,"safe":true,"issues":["No portion mass"]}'
+                ),
+                name="gateway",
+                capabilities=ModelCapabilities(structured_output=True, context_window_tokens=32768),
+            )
+        ),
+    )
+    app = TestClient(
+        create_app(
+            settings=Settings(api_key="service-secret", gateway_api_key="gateway-secret"),
+            service=service,
+        )
+    )
+    response = app.post(
+        "/a2a/v1/nutrition-coach",
+        headers={
+            "Authorization": "Bearer service-secret",
+        },
+        json={
+            "jsonrpc": "2.0",
+            "id": "verification-test",
+            "method": "message/send",
+            "params": {
+                "message": {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "kind": "text",
+                            "text": "CONTEXT:\nPortion mass is unknown.\nQUESTION: Calories?",
+                        }
+                    ],
+                }
+            },
+        },
+    )
+    assert response.status_code == 502
+    assert response.json()["code"] == "agent_execution_failed"
+    assert "650" not in response.text
+    assert "artifacts" not in response.json()

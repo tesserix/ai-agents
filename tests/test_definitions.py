@@ -26,7 +26,7 @@ def test_agents_are_reviewable_bounded_adk_definitions() -> None:
         assert "per 100g" in agent.instructions
         assert "[cite:fact_id]" in agent.instructions
 
-    assert DEFINITIONS["nutrition-coach"].agent.version == "1.0.2"
+    assert DEFINITIONS["nutrition-coach"].agent.version == "1.0.3"
     assert DEFINITIONS["meal-planner"].agent.version == "1.0.3"
     assert DEFINITIONS["plan-supervisor"].agent.version == "1.0.3"
 

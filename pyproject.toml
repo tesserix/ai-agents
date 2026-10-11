@@ -6,23 +6,26 @@ requires-python = ">=3.14"
 dependencies = [
   "fastapi>=0.116,<1",
   "httpx>=0.28,<1",
+  # Patch the Google ADK transitive inherited from the pinned base.
+  "msgpack>=1.1.3,<2",
   "opentelemetry-exporter-otlp-proto-http>=1.36,<2",
   "opentelemetry-sdk>=1.36,<2",
   "pydantic>=2.11,<3",
   "pydantic-settings>=2.10,<3",
-  "structlog>=25.4,<26",
+  "structlog>=26.1,<27",
   "temporalio>=1.32,<2",
   "uvicorn>=0.35,<1",
 ]
 
 [dependency-groups]
 dev = [
-  "mypy>=1.18,<2",
+  "httpx2>=2.13.1",
+  "mypy>=2.3,<3",
   "pytest>=9,<10",
   "pytest-asyncio>=1.2,<2",
   "pytest-cov>=7,<8",
   "pyyaml>=6,<7",
-  "ruff>=0.14,<0.15",
+  "ruff>=0.16,<0.17",
   "types-pyyaml>=6,<7",
 ]
 
@@ -77,3 +80,7 @@ omit = [
 [tool.coverage.report]
 fail_under = 90
 show_missing = true
+
+[tool.uv]
+# google-adk 2.11 in the ADK base requires <=1.42.1. Remove when its cap lifts.
+constraint-dependencies = ["opentelemetry-api<=1.42.1", "opentelemetry-sdk<=1.42.1"]

@@ -18,14 +18,27 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project --inexact
 COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-editable --inexact
+    uv sync --frozen --no-dev --no-editable --inexact \
+    && uv pip check --python /opt/adk-venv/bin/python
 
 FROM ${BASE_IMAGE} AS runtime-base
+
+USER root
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY --from=builder --chown=10001:10001 /opt/adk-venv /opt/adk-venv
+# Production only imports installed wheels; package installers are build-only.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends --only-upgrade \
+       libpcre2-8-0=10.46-1~deb13u3 \
+       libssl3t64=3.5.7-1~deb13u3 \
+       openssl=3.5.7-1~deb13u3 \
+       openssl-provider-legacy=3.5.7-1~deb13u3 \
+    && rm -rf /var/lib/apt/lists/*
+RUN /opt/adk-venv/bin/python -m pip uninstall --yes setuptools pip \
+    && /usr/local/bin/python -m pip uninstall --yes setuptools pip
 USER 10001:10001
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \

@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import json
 from contextlib import asynccontextmanager
@@ -68,7 +69,7 @@ async def test_roamie_model_uses_only_model_gateway_credential():
 
 @pytest.mark.parametrize("stateful", [False, True])
 async def test_adk_mcp_session_discovers_and_calls_only_pinned_gateway_tool(stateful):
-    contract = json.loads(Path("contracts/roamie-travel.json").read_text())
+    contract = json.loads(await asyncio.to_thread(Path("contracts/roamie-travel.json").read_text))
     shape = {key: contract[key] for key in ("input", "output")}
     digest = hashlib.sha256(
         json.dumps(shape, sort_keys=True, separators=(",", ":")).encode()

@@ -98,7 +98,7 @@ DEFINITIONS: dict[str, AgentDefinition[Any]] = {
     "nutrition-coach": _definition(
         Agent(
             name="nutrition-coach",
-            version="1.0.2",
+            version="1.0.3",
             instructions=(
                 "Give concise, evidence-aware general nutrition guidance. "
                 "Never diagnose, prescribe medication or supplements, or replace a clinician. "
