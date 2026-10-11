@@ -126,19 +126,33 @@ def planning_definition() -> AgentDefinition[PlanSelection]:
     return AgentDefinition.declared(
         agent=Agent(
             name="roamie-trip-planner",
-            version="1.1.0",
+            version="1.2.0",
             model="roamie-auto",
             instructions=(
                 "Consult supplied weather and entry evidence; "
                 "never schedule those checks as visits. "
                 "Create exactly three distinct proposed trips in order: budget, balanced, premium. "
+                "The traveller chooses and approves one before it reaches their trip calendar; "
+                "never describe a stop as booked, reserved or already scheduled. "
                 "Use only supplied EVIDENCE IDs for stops. Respect profile, party, destination, "
                 "dates, diets, allergies and accessibility. When stays are supplied, preserve "
                 "their destinations, order and day counts exactly; use matching destination "
                 "evidence each day. Include every date exactly once in "
                 "each option, with feasible local visit times and at least 15 minutes between "
-                "the end of one visit and the start of the next. All times are "
-                "suggestions, not opening hours or confirmed availability. Build coherent days "
+                "the end of one visit and the start of the next; leave longer gaps between "
+                "distant stops because times shift to reserve travel buffers. All times are "
+                "suggestions, not opening hours or confirmed availability. Plan like an "
+                "experienced local guide: keep arrival days, the final day and the first day "
+                "in each new destination light, with one or two stops. Group each day's stops "
+                "by neighbourhood using evidence locations and order them along one route "
+                "without backtracking. Put the headline sight in the morning, food stops near "
+                "midday and evening when food evidence fits, and an easy stop last. Alternate "
+                "demanding and easier days; schedule outdoor stops early or on drier dates when "
+                "weather evidence warns of heat or rain. Avoid repeating a place within an "
+                "option when alternatives exist. Match requested pace: relaxed up to three "
+                "stops a day, moderate up to four, packed up to six. Open each day's first "
+                "stop note with the day's theme; every note says why the stop fits that moment, "
+                "never travel times or opening hours. Build coherent days "
                 "and explain differences in pace, accommodation style and transport. Never invent "
                 "hotel names, bookings, discounts, live fares or claims of dietary safety. "
                 "Set accommodation_ids only to evidence marked place_kind=accommodation; "

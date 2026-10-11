@@ -528,7 +528,7 @@ async def test_manager_independently_validates_three_plans_before_final_review(c
                 current_revision=lambda: "1",
                 specialist=Specialist.TRIP,
                 request=RecommendationRequest(
-                    prompt="Three plans", plan_options=True, currency="AUD"
+                    prompt="Three plans", plan_options=True, currency="AUD", destination="Hanoi"
                 ),
                 facts=[fact],
             )
@@ -540,6 +540,10 @@ async def test_manager_independently_validates_three_plans_before_final_review(c
             result = await run()
             assert len(result.response.trip_options) == 3
             assert len(set(result.review_run_ids)) == 2
+            assert [question.topic for question in result.response.questions] == [
+                "interests",
+                "pace",
+            ]
 
 
 @pytest.mark.parametrize("planning", [False, True])
@@ -655,10 +659,13 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(planning,
                 revision="1",
                 start_date="2026-10-01" if planning else None,
                 end_date="2026-10-01" if planning else None,
+                budget_minor=8000 if planning else None,
             ),
             current_revision=lambda: "1",
             specialist=Specialist.TRIP,
-            request=RecommendationRequest(prompt="Plan", plan_options=planning),
+            request=RecommendationRequest(
+                prompt="Plan", plan_options=planning, destination="Hanoi"
+            ),
             facts=facts,
         )
     preflight_text = "".join(part.text for part in model.requests[0].messages[-1].content)
@@ -795,3 +802,84 @@ async def test_manager_can_review_measured_three_plan_evidence_usage():
     )
     assert result.verdict.decision == "approve"
     assert result.input_tokens == 17205
+
+
+def offline_manager(client):
+    return PersonalTripManager(
+        workers={
+            Specialist.TRIP: WorkerEndpoint(
+                name="roamie-trip-planner",
+                url="https://gateway.example.org/a2a/v1/roamie-trip-planner",
+            )
+        },
+        client=A2AWorkerClient(api_key=SecretStr("fixture"), timeout=5, client=client),
+        supervisor=SupervisorService(provider=ScriptedProvider()),
+        delegation_key=SecretStr("d" * 32),
+        identity_key=SecretStr("a" * 32),
+    )
+
+
+@pytest.mark.parametrize(
+    "profile_changes,request_changes,topics",
+    [
+        ({}, {}, ["destination", "dates", "budget"]),
+        (
+            {"start_date": "2026-10-01", "end_date": "2026-10-20", "budget_minor": 900000},
+            {"destination": "Japan"},
+            ["trip_length"],
+        ),
+        (
+            {"start_date": "2026-10-01", "end_date": "2026-10-05", "budget_minor": 900000},
+            {"stays": [{"destination": "Hanoi", "days": 2}, {"destination": "Hue", "days": 2}]},
+            ["stays"],
+        ),
+        (
+            {"start_date": "2026-10-01", "end_date": "2026-10-03"},
+            {"destination": "   "},
+            ["destination", "budget"],
+        ),
+    ],
+    ids=["nothing-known", "longer-than-two-weeks", "stays-miss-a-day", "blank-destination"],
+)
+async def test_planner_asks_for_missing_trip_details_before_any_review_or_worker(
+    profile_changes, request_changes, topics
+):
+    from roamie_agents.manager import PlanningDetailsRequired
+
+    def refuse(request):
+        raise AssertionError("worker must not run without trip details")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(refuse)) as client:
+        with pytest.raises(PlanningDetailsRequired) as raised:
+            await offline_manager(client).manage(
+                profile=Profile(subject="user", trip_id="trip", revision="1", **profile_changes),
+                current_revision=lambda: "1",
+                specialist=Specialist.TRIP,
+                request=RecommendationRequest(
+                    prompt="Plan my holiday", plan_options=True, **request_changes
+                ),
+                facts=[],
+            )
+    questions = raised.value.questions
+    assert [question.topic for question in questions if question.required] == topics
+    assert all(question.question.endswith("?") and question.reason for question in questions)
+
+
+def test_complete_brief_only_suggests_follow_up_questions():
+    from roamie_agents.manager import effective_request, require_planning_details
+
+    profile = Profile(
+        subject="user",
+        trip_id="trip",
+        revision="1",
+        start_date="2026-10-01",
+        end_date="2026-10-03",
+        budget_minor=300000,
+    )
+    vague = RecommendationRequest(prompt="Plan", plan_options=True, destination="Hanoi")
+    assert [q.topic for q in require_planning_details(effective_request(profile, vague))] == [
+        "interests",
+        "pace",
+    ]
+    detailed = vague.model_copy(update={"preferences": ("Street food", "Relaxed pace")})
+    assert require_planning_details(effective_request(profile, detailed)) == ()

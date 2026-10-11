@@ -120,8 +120,9 @@ class TravelService:
             "roamie_model_finished", specialist=specialist.value, run_id=run_id, state=state
         )
         if planning and state == "completed" and isinstance(output, PlanSelection):
+            locations = {fact.id: fact.location for fact in eligible if fact.location}
             output = output.model_copy(
-                update={"options": prepare_options(output.options, source_ids)}
+                update={"options": prepare_options(output.options, source_ids, locations)}
             )
             try:
                 validate_options(
@@ -139,6 +140,7 @@ class TravelService:
                     ]
                     or None,
                     evidence_destinations={fact.id: fact.destination for fact in eligible},
+                    locations=locations,
                 )
             except ValueError as error:
                 raise TravelFailure(str(error), run_id=run_id, state=state) from error

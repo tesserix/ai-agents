@@ -160,7 +160,20 @@ class Recommendation(Evidence):
     warnings: tuple[str, ...] = ()
 
 
+PlanningTopic = Literal[
+    "destination", "dates", "trip_length", "stays", "budget", "interests", "pace"
+]
+
+
+class PlanningQuestion(Contract):
+    topic: PlanningTopic
+    question: str = Field(min_length=1, max_length=200)
+    reason: str = Field(min_length=1, max_length=200)
+    required: bool
+
+
 class TravelResponse(Contract):
+    questions: Annotated[tuple[PlanningQuestion, ...], Field(max_length=7)] = ()
     trip_options: tuple[TripOption, ...] = ()
     status: Literal["ok", "unavailable", "no_matches"]
     specialist: Specialist

@@ -165,3 +165,9 @@ Manager and worker failures emit `roamie_request_failed` with a server-generated
 The itinerary preflight reviews the saved constraints and place evidence. Weather and entry evidence remain in their specialist reviews and the final manager review. Missing passport/residence details do not block proposed sightseeing unless the user requests verified entry eligibility or visa fees. Review summaries remain bounded to 500 characters.
 
 Planning model calls use short request-local evidence references, restored to original provider IDs before validation and signed responses. Adjacent, non-overlapping proposed visits receive a minimum 15-minute transit buffer; adjustments cascade within a day. Actual overlaps and midnight overflow remain invalid. All adjusted plans still pass the independent manager review. Concise notes reduce long-trip generation work without extending runtime deadlines.
+
+### Planning questions and approval
+
+Before any provider search or model call, the manager checks a `plan_options` request for destination, travel dates (14 days at most), stays covering every date, and a budget ceiling. A missing detail returns HTTP 422 `{"detail": {"reason": "planning_details_required", "questions": [...]}}`; each question carries `topic`, `question`, `reason` and `required`. Successful plans include optional follow-up questions (interests, pace) in `response.questions`. The traveller approves one proposed option before the app writes it to the trip calendar; the planner never books or schedules anything.
+
+Gaps between consecutive stops grow with straight-line distance (4 minutes per km, 15 minimum, 90 maximum) in both worker preparation and manager validation. This is a planning buffer, never a quoted ETA.

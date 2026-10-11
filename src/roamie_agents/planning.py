@@ -1,9 +1,31 @@
+import math
+from collections.abc import Mapping
 from datetime import date, timedelta
-from typing import Annotated, Literal
+from typing import Annotated, Final, Literal
 
 from pydantic import Field
 
 from roamie_agents.base import Contract, Location
+
+# Straight-line distance at mixed urban transit speed; a planning buffer, never a quoted ETA.
+MINUTES_PER_KM: Final = 4
+MIN_TRANSIT_MINUTES: Final = 15
+MAX_TRANSIT_MINUTES: Final = 90
+
+
+def transit_minutes(start: Location | None, finish: Location | None) -> int:
+    if start is None or finish is None:
+        return MIN_TRANSIT_MINUTES
+    lat1, lon1, lat2, lon2 = map(
+        math.radians, (start.latitude, start.longitude, finish.latitude, finish.longitude)
+    )
+    km = 12742 * math.asin(
+        math.sqrt(
+            math.sin((lat2 - lat1) / 2) ** 2
+            + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
+        )
+    )
+    return min(MAX_TRANSIT_MINUTES, max(MIN_TRANSIT_MINUTES, math.ceil(km * MINUTES_PER_KM)))
 
 
 class PlanningBudget(Contract):
@@ -70,7 +92,9 @@ def validate_options(
     ceiling: int | None,
     destinations: list[str] | None = None,
     evidence_destinations: dict[str, str | None] | None = None,
+    locations: Mapping[str, Location] | None = None,
 ) -> None:
+    places = locations or {}
     if start is None or end is None or not 0 <= (end - start).days < 14:
         raise ValueError("planning_dates_required")
     if [option.tier for option in options] != ["budget", "balanced", "premium"]:
@@ -90,9 +114,12 @@ def validate_options(
             raise ValueError("planning_destinations_mismatch")
         for day in option.days:
             finish = 0
+            last_place: str | None = None
             for stop in day.stops:
                 hour, minute = map(int, stop.time.split(":"))
                 begin = hour * 60 + minute
+                if last_place is not None:
+                    finish += transit_minutes(places.get(last_place), places.get(stop.evidence_id))
                 if (
                     stop.evidence_id not in evidence_ids
                     or begin < finish
@@ -104,11 +131,14 @@ def validate_options(
                     day.destination,
                 ):
                     raise ValueError("place_destination_mismatch")
-                finish = begin + stop.minutes + 15
+                finish = begin + stop.minutes
+                last_place = stop.evidence_id
 
 
 def prepare_options(
-    options: tuple[TripOption, ...], source_ids: dict[str, str]
+    options: tuple[TripOption, ...],
+    source_ids: dict[str, str],
+    locations: Mapping[str, Location] | None = None,
 ) -> tuple[TripOption, ...]:
     return tuple(
         option.model_copy(
@@ -129,7 +159,8 @@ def prepare_options(
                                         }
                                     )
                                     for stop in day.stops
-                                )
+                                ),
+                                locations,
                             )
                         }
                     )
@@ -141,17 +172,30 @@ def prepare_options(
     )
 
 
-def reserve_transit_time(stops: tuple[PlanningStop, ...]) -> tuple[PlanningStop, ...]:
+def reserve_transit_time(
+    stops: tuple[PlanningStop, ...], locations: Mapping[str, Location] | None = None
+) -> tuple[PlanningStop, ...]:
+    places = locations or {}
     previous_end = 0
-    scheduled_end = -15
-    scheduled = []
+    scheduled_end: int | None = None
+    scheduled: list[PlanningStop] = []
     for stop in stops:
         hour, minute = map(int, stop.time.split(":"))
         begin = hour * 60 + minute
         if begin < previous_end:
             return stops
         previous_end = begin + stop.minutes
-        shifted = max(begin, scheduled_end + 15)
+        shifted = (
+            begin
+            if scheduled_end is None
+            else max(
+                begin,
+                scheduled_end
+                + transit_minutes(
+                    places.get(scheduled[-1].evidence_id), places.get(stop.evidence_id)
+                ),
+            )
+        )
         scheduled_end = shifted + stop.minutes
         if scheduled_end > 1440:
             return stops
