@@ -1,6 +1,6 @@
 """Validated service configuration."""
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +11,7 @@ class Settings(BaseSettings):
         env_prefix="KORA_AGENTS_",
         frozen=True,
         extra="forbid",
+        hide_input_in_errors=True,
     )
 
     api_key: SecretStr
@@ -20,6 +21,13 @@ class Settings(BaseSettings):
     tenant_id: str = "kora"
     max_prompt_chars: int = Field(default=12_000, ge=1, le=50_000)
     request_timeout_seconds: float = Field(default=45.0, gt=0, le=60)
+
+    @field_validator("api_key", "gateway_api_key")
+    @classmethod
+    def nonempty_credential(cls, value: SecretStr) -> SecretStr:
+        if not value.get_secret_value().strip():
+            raise ValueError("credential must not be empty")
+        return value
 
     def __repr__(self) -> str:
         """Keep both service credentials out of logs and tracebacks."""

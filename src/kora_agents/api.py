@@ -10,12 +10,14 @@ from typing import Annotated, Literal
 
 import structlog
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
 from agent_telemetry import bound_session
+from kora_agents.body_limit import BodyLimitMiddleware
 from kora_agents.config import Settings
 from kora_agents.execution import AgentService, ExecutionResult
 from kora_agents.identity import INBOUND_DELEGATED_IDENTITY_HEADER, delegated_end_user_token
@@ -91,7 +93,7 @@ def _authenticate(settings: Settings) -> Callable[..., None]:
 
     def authenticate(authorization: Annotated[str | None, Header()] = None) -> None:
         scheme, _, token = (authorization or "").partition(" ")
-        if scheme.lower() != "bearer" or not hmac.compare_digest(token, expected):
+        if scheme.lower() != "bearer" or not hmac.compare_digest(token.encode(), expected.encode()):
             raise HTTPException(status_code=401, detail="unauthorized")
 
     return authenticate
@@ -164,6 +166,13 @@ def create_app(
             duration_ms=round((time.perf_counter() - started) * 1000, 2),
         )
         return response
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(_request: Request, _error: RequestValidationError) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={"code": "invalid_request", "message": "request validation failed"},
+        )
 
     @app.exception_handler(HTTPException)
     async def http_error(_request: Request, error: HTTPException) -> JSONResponse:
@@ -263,4 +272,5 @@ def create_app(
             },
         }
 
+    app.add_middleware(BodyLimitMiddleware)
     return app

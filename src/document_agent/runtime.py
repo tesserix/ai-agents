@@ -68,7 +68,7 @@ class DocumentAgentService:
         try:
             async with asyncio.timeout(self._timeout_seconds):
                 result = await self._tool.extract_document(request)
-        except (TimeoutError, AustralisToolUnavailable):
+        except TimeoutError, AustralisToolUnavailable:
             return DocumentAgentResponse(state=DocumentAgentState.UNAVAILABLE)
 
         return DocumentAgentResponse(

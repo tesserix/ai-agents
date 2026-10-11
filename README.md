@@ -168,3 +168,27 @@ so deployment configuration cannot accidentally boot the other service.
 Kubernetes deployment is owned by `tesserix-k8s`; this repository publishes
 the images and Agentic Registry manifests, but makes no imperative cluster
 change.
+
+### Coach response verification
+
+The `nutrition-coach` runtime sends every completed draft through a fresh,
+structured `nutrition-verifier` run before returning an artifact. Delivery
+requires `supported: true`, `safe: true`, and an empty `issues` list. Invalid,
+failed, timed-out, or rejected reviews withhold the draft. The verifier cannot
+rewrite the candidate into a new, unreviewed answer. Both stages share a
+55-second deadline; the verifier has a 15-second budget and one model call.
+
+Verification checks the supplied application context, citations, units and
+arithmetic, dietary constraints, and medical safety. Unknown portions, oil or
+masala quantities, and amounts eaten must remain unknown unless supported by
+provided evidence. This is an additional model-based check, not a guarantee
+of factual accuracy. Missing evidence should produce an explicit uncertainty
+statement or a request for the missing measurement during generation.
+
+Both stages use the configured gateway provider and inherited user identity.
+The verifier records its own agent/version/run attribution; successful A2A
+usage sums both stages. The internal verifier is not an independently callable
+public agent. Meal plans still use the separate planner/supervisor flow.
+
+Kora's HTTP adapter supports bounded synchronous `message/send` JSON-RPC;
+it does not claim full A2A streaming, task polling, or push support.

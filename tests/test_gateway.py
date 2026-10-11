@@ -1,5 +1,6 @@
 import httpx
 import pytest
+from pydantic import SecretStr
 from tesserix_adk.core import ConfigurationError, Message, ModelRequest, TextPart
 
 from kora_agents.config import Settings
@@ -24,7 +25,14 @@ class RecordingTransport(httpx.AsyncBaseTransport):
                     {
                         "index": 0,
                         "finish_reason": "stop",
-                        "message": {"role": "assistant", "content": "balanced plate"},
+                        "message": {
+                            "role": "assistant",
+                            "content": (
+                                '{"supported":true,"safe":true,"issues":[]}'
+                                if request.headers.get("x-kora-agent-id") == "nutrition-verifier"
+                                else "balanced plate"
+                            ),
+                        },
                     }
                 ],
                 "usage": {"prompt_tokens": 4, "completion_tokens": 2},
@@ -98,7 +106,9 @@ async def test_provider_uses_one_api_version_and_both_gateway_credentials(monkey
 async def test_provider_refuses_a_blank_gateway_key_before_network(monkeypatch) -> None:
     recording = RecordingTransport()
     monkeypatch.setattr(httpx, "AsyncHTTPTransport", lambda: recording)
-    settings = Settings(api_key="service-key", gateway_api_key="")
+    settings = Settings(api_key="service-key", gateway_api_key="gateway-key").model_copy(
+        update={"gateway_api_key": SecretStr("")}
+    )
     factory = GatewayProviderFactory(settings)
 
     try:
@@ -152,12 +162,19 @@ async def test_runtime_stamps_agent_and_run_identity_on_model_calls(monkeypatch)
         await factory.for_definition(DEFINITIONS["nutrition-coach"]).complete(model_request())
     finally:
         await factory.aclose()
-    for request, result in zip(recording.requests[:2], [first, second], strict=True):
+    for request, result in zip(recording.requests[0:4:2], [first, second], strict=True):
         assert request.headers["x-kora-agent-id"] == "nutrition-coach"
         assert (
             request.headers["x-kora-agent-version"] == DEFINITIONS["nutrition-coach"].agent.version
         )
         assert request.headers["x-kora-agent-run-id"] == result.run_id
     assert first.run_id != second.run_id
-    assert "x-kora-agent-id" not in recording.requests[2].headers
-    assert "x-kora-agent-run-id" not in recording.requests[2].headers
+    assert "x-kora-agent-id" not in recording.requests[4].headers
+    assert "x-kora-agent-run-id" not in recording.requests[4].headers
+
+    for request in recording.requests[1:4:2]:
+        assert request.headers["x-kora-agent-id"] == "nutrition-verifier"
+        assert request.headers["x-kora-ai-capability"] == "json"
+    assert len({r.headers["x-kora-agent-run-id"] for r in recording.requests[:4]}) == 4
+    assert first.input_tokens == 8
+    assert first.output_tokens == 4

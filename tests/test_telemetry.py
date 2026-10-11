@@ -164,12 +164,16 @@ def test_build_recorder_is_noop_without_an_endpoint() -> None:
 
 
 def test_direct_langfuse_keys_become_basic_auth() -> None:
+    from unittest.mock import patch
+
     from agent_telemetry.recorder import _exporter
 
     keyed = SETTINGS.model_copy(
         update={"public_key": SecretStr("pk"), "secret_key": SecretStr("sk")}
     )
-    assert _exporter(keyed)._session.headers["Authorization"] == "Basic cGs6c2s="
+    with patch("agent_telemetry.recorder.OTLPSpanExporter") as exporter:
+        _exporter(keyed)
+    assert exporter.call_args.kwargs["headers"]["Authorization"] == "Basic cGs6c2s="
 
 
 def test_session_binding_is_scoped() -> None:
@@ -184,6 +188,7 @@ async def test_runtime_records_every_run_it_completes() -> None:
     recorder = LangfuseRecorder(SETTINGS, exporter=exporter)
     scripted = ScriptedProvider(
         ModelResponse(content="Choose whole grains."),
+        ModelResponse(content='{"supported":true,"safe":true,"issues":[]}'),
         name="gateway",
         capabilities=ModelCapabilities(structured_output=True, context_window_tokens=32_768),
     )
@@ -192,6 +197,7 @@ async def test_runtime_records_every_run_it_completes() -> None:
     )
     result = await service.run("nutrition-coach", "How can I improve lunch?", tenant="kora")
     recorder.shutdown()
+    assert any(span.name == "nutrition-verifier" for span in exporter.spans)
     assert exporter.spans[0].name == "nutrition-coach"
     assert (
         dict(exporter.spans[0].attributes or {})["langfuse.trace.metadata.run_id"] == result.run_id
