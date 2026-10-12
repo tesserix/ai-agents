@@ -148,8 +148,12 @@ checks must pass before enabling the currently disabled workload chart.
 The manager checks the parent request before launching the itinerary worker and its
 independent weather/entry checks concurrently. Every specialist retains its own
 request and response review. The final itinerary review waits for these results;
-failed or cancelled requests cancel and await unfinished supporting work. Only
-clarification needed by an optional check becomes an explicit unavailable warning.
+failed or cancelled requests cancel and await unfinished supporting work. Each
+supporting check has a 25-second deadline, concurrent with itinerary generation.
+Clarification, deadline, worker availability and review availability failures in
+a supporting check become explicit unavailable warnings, with no recommendations.
+The final itinerary reviewer receives those warnings and must still approve the
+plan. Supporting checks cannot consume the full 78-second manager deadline.
 Ownership, revision, signature and main-request review failures still stop delivery.
 
 Three itineraries plus their provider evidence exceeded the generic supervisor's

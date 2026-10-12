@@ -543,8 +543,10 @@ async def test_manager_independently_validates_three_plans_before_final_review(c
 
 
 @pytest.mark.parametrize("planning", [False, True])
-@pytest.mark.parametrize("advisory_decision", ["approve", "amend"])
-async def test_trip_consults_weather_and_entry_before_itinerary_review(planning, advisory_decision):
+@pytest.mark.parametrize("advisory_decision", ["approve", "amend", "unavailable", "timeout"])
+async def test_trip_consults_weather_and_entry_before_itinerary_review(
+    planning, advisory_decision, monkeypatch
+):
     from roamie_agents.contracts import Evidence, project
 
     now = datetime.now(UTC)
@@ -567,6 +569,18 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(planning,
 
     called = []
     all_workers_started = asyncio.Event()
+    advisory_deadlines = {}
+    cancelled = []
+    original_timeout = asyncio.timeout
+
+    def tracked_timeout(seconds):
+        deadline = original_timeout(seconds)
+        if seconds == 25:
+            advisory_deadlines[asyncio.current_task()] = deadline
+        return deadline
+
+    if advisory_decision == "timeout":
+        monkeypatch.setattr(asyncio, "timeout", tracked_timeout)
 
     async def reply(request):
         body = json.loads(request.content)
@@ -575,6 +589,16 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(planning,
         )
         kind = incoming.context.specialist
         called.append(kind)
+        if advisory_decision == "unavailable" and kind != Specialist.TRIP:
+            return httpx.Response(503)
+        if advisory_decision == "timeout" and kind != Specialist.TRIP:
+            deadline = advisory_deadlines.get(asyncio.current_task())
+            assert deadline is not None, "supporting checks need their own bounded deadline"
+            deadline.reschedule(asyncio.get_running_loop().time())
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.append(kind)
         if advisory_decision == "approve":
             if len(called) == 3:
                 all_workers_started.set()
@@ -629,7 +653,7 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(planning,
     model = ScriptedProvider(
         *(
             [approved for _ in range(6)]
-            if advisory_decision == "approve"
+            if advisory_decision != "amend"
             else [approved, rejected, rejected, approved]
         ),
         capabilities=ModelCapabilities(structured_output=True, context_window_tokens=32768),
@@ -671,10 +695,14 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(planning,
     assert {fact["category"] for fact in final_context["evidence"]} == {
         kind.value for kind in kinds
     }
-    assert set(called) == (set(kinds) if advisory_decision == "approve" else {Specialist.TRIP})
-    if advisory_decision == "amend":
+    assert set(called) == (set(kinds) if advisory_decision != "amend" else {Specialist.TRIP})
+    if advisory_decision != "approve":
         assert all(item.status == "unavailable" for item in result.advisories)
         assert any("entry-guidance" in limitation for limitation in result.response.limitations)
+        assert all(not item.recommendations for item in result.advisories)
+        assert len(result.review_run_ids) == 2
+    if advisory_decision == "timeout":
+        assert set(cancelled) == {Specialist.WEATHER, Specialist.ENTRY}
     assert [item.specialist for item in result.advisories] == list(kinds[:2])
     assert "planning_checks" in "".join(
         part.text for part in model.requests[-1].messages[-1].content
