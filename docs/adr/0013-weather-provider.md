@@ -25,7 +25,9 @@ forecasts in JP, CN, CU, IR, KP, KR, SY or VN. A primary outage in these countri
 still produces explicit unavailable guidance. “Global primary” is not a claim
 that Google provides global fallback coverage.
 
-The primary and fallback each have a six-second total deadline, including reads.
+The primary has a 35-second total deadline, including reads, to accommodate
+self-hosted cold data loads observed at up to 29 seconds. Google fallback has a
+six-second deadline; the manager retains its 80-second overall request limit.
 429, HTTP errors, invalid responses and network failures trigger Google. Empty
 near-term results also trigger Google, even if the primary returned HTTP200.
 Successful primary forecasts do not call Google. Partial usable forecasts remain

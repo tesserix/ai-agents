@@ -184,3 +184,51 @@ async def test_slow_fallback_is_bounded():
         Specialist.WEATHER, request()
     )
     assert result.status == "unavailable"
+
+
+async def test_cold_self_hosted_forecast_has_time_to_load_without_google(monkeypatch):
+    loop = asyncio.get_running_loop()
+    real_time = loop.time
+    elapsed = 0
+    monkeypatch.setattr(loop, "time", lambda: real_time() + elapsed)
+
+    async def reply(req):
+        nonlocal elapsed
+        assert req.url.host == "roamie-weather.roamie.svc.cluster.local"
+        elapsed += 12
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        if req.extensions["timeout"]["read"] < 12:
+            raise httpx.ReadTimeout("cold forecast data load")
+        return httpx.Response(
+            200,
+            json={
+                "timezone": "Asia/Tokyo",
+                "daily_units": {
+                    "time": "iso8601",
+                    "temperature_2m_max": "°C",
+                    "temperature_2m_min": "°C",
+                    "precipitation_probability_max": "%",
+                    "uv_index_max": "",
+                },
+                "daily": {
+                    "time": ["2026-10-12"],
+                    "temperature_2m_max": [23],
+                    "temperature_2m_min": [14],
+                    "precipitation_probability_max": [20],
+                    "uv_index_max": [3],
+                },
+            },
+        )
+
+    class Fallback:
+        async def search(self, specialist, request):
+            pytest.fail("cold primary prematurely fell back to Google")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as client:
+        result = await WeatherFailover(
+            OpenMeteoSource(client, None, self_hosted=True, clock=lambda: NOW), Fallback()
+        ).search(Specialist.WEATHER, request("JP"))
+    assert result.status == "ok"
+    assert result.facts[0].weather.maximum_celsius == 23
+    assert str(result.facts[0].source_url) == "https://open-meteo.com/"
