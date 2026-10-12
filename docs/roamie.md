@@ -169,3 +169,13 @@ Manager and worker failures emit `roamie_request_failed` with a server-generated
 The itinerary preflight reviews the saved constraints and place evidence. Weather and entry evidence remain in their specialist reviews and the final manager review. Missing passport/residence details do not block proposed sightseeing unless the user requests verified entry eligibility or visa fees. Review summaries remain bounded to 500 characters.
 
 Planning model calls use short request-local evidence references, restored to original provider IDs before validation and signed responses. Adjacent, non-overlapping proposed visits receive a minimum 15-minute transit buffer; adjustments cascade within a day. Actual overlaps and midnight overflow remain invalid. All adjusted plans still pass the independent manager review. Concise notes reduce long-trip generation work without extending runtime deadlines.
+
+### Self-hosted weather and failover
+
+Set `ROAMIE_MANAGER_OPEN_METEO_SELF_HOSTED=true` only with the validated private
+`roamie-weather` service. Open-Meteo becomes primary; the existing
+`ROAMIE_MANAGER_WEATHER_API_KEY` remains Google's fallback credential. Each
+provider has a six-second deadline. Missing/invalid near-term data, rate limits,
+HTTP failures and timeouts trigger fallback. Google cannot cover every country.
+
+See [architecture, limits and deployment evidence](adr/0013-weather-provider.md).
