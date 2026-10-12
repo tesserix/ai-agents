@@ -159,7 +159,7 @@ class OpenMeteoSource:
                             ),
                         )
                     )
-            except (httpx.HTTPError, ValueError, ValidationError, ZoneInfoNotFoundError):
+            except httpx.HTTPError, ValueError, ValidationError, ZoneInfoNotFoundError:
                 return EvidenceBatch(status="unavailable")
         covered = {fact.weather.local_date for fact in facts if fact.weather}
         missing = tuple(str(day) for day in dates if day not in covered)

@@ -275,7 +275,7 @@ class PersonalTripManager:
                         None,
                     )
                 return result.response
-            except (TimeoutError, WorkerCallError, SupervisionFailedError):
+            except TimeoutError, WorkerCallError, SupervisionFailedError:
                 return TravelResponse(
                     specialist=kind,
                     status="unavailable",
