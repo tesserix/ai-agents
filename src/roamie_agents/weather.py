@@ -8,6 +8,9 @@ from roamie_agents.contracts import Evidence, RecommendationRequest, Specialist,
 from roamie_agents.evidence import EvidenceBatch
 
 SOURCE = "https://developers.google.com/maps/documentation/weather/daily-forecast"
+COVERAGE_SOURCE = "https://developers.google.com/maps/documentation/weather/coverage"
+# Daily forecast coverage checked against the provider table on 2026-10-12.
+UNSUPPORTED_FORECAST_COUNTRIES = frozenset({"CN", "CU", "IR", "JP", "KP", "KR", "SY", "VN"})
 
 
 class GoogleWeatherSource:
@@ -35,6 +38,30 @@ class GoogleWeatherSource:
         )
         if len(dates) > 366:
             return EvidenceBatch(status="unavailable")
+        if request.destination_country in UNSUPPORTED_FORECAST_COUNTRIES:
+            return EvidenceBatch(
+                status="ok",
+                facts=[
+                    Evidence(
+                        id="weather-coverage",
+                        name="Daily forecasts unavailable for this destination",
+                        category=Specialist.WEATHER,
+                        source_url=COVERAGE_SOURCE,
+                        observed_at=now,
+                        offer_expires_at=now + timedelta(hours=1),
+                        location=request.origin,
+                        weather=WeatherDetails(
+                            coverage="unavailable",
+                            missing_dates=tuple(str(day) for day in dates),
+                            suggestions=(
+                                "Google Weather does not provide daily forecasts in this country. "
+                                "Consult the local meteorological service for forecasts "
+                                "and alerts.",
+                            ),
+                        ),
+                    )
+                ],
+            )
         # Allow a day at either UTC boundary; use provider-local displayDate as authoritative.
         far_future = request.start_date > now.date() + timedelta(days=10)
         facts: list[Evidence] = []

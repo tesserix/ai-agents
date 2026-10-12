@@ -175,3 +175,13 @@ Planning model calls use short request-local evidence references, restored to or
 Before any provider search or model call, the manager checks a `plan_options` request for destination, travel dates (14 days at most), stays covering every date, and a budget ceiling. A missing detail returns HTTP 422 `{"detail": {"reason": "planning_details_required", "questions": [...]}}`; each question carries `topic`, `question`, `reason` and `required`. Successful plans include optional follow-up questions (interests, pace) in `response.questions`. The traveller approves one proposed option before the app writes it to the trip calendar; the planner never books or schedules anything.
 
 Gaps between consecutive stops grow with straight-line distance (4 minutes per km, 15 minimum, 90 maximum) in both worker preparation and manager validation. This is a planning buffer, never a quoted ETA.
+
+### Self-hosted weather and failover
+
+Set `ROAMIE_MANAGER_OPEN_METEO_SELF_HOSTED=true` only with the validated private
+`roamie-weather` service. Open-Meteo becomes primary; the existing
+`ROAMIE_MANAGER_WEATHER_API_KEY` remains Google's fallback credential. Each
+provider has a six-second deadline. Missing/invalid near-term data, rate limits,
+HTTP failures and timeouts trigger fallback. Google cannot cover every country.
+
+See [architecture, limits and deployment evidence](adr/0013-weather-provider.md).

@@ -76,6 +76,34 @@ async def test_far_future_never_fabricates_a_forecast_or_calls_provider():
     assert result.facts[0].weather.maximum_celsius is None
 
 
+@pytest.mark.parametrize("country", ["CN", "CU", "IR", "JP", "KP", "KR", "SY", "VN"])
+@pytest.mark.parametrize("future", [False, True])
+async def test_unsupported_forecast_countries_explain_coverage_without_retrying(country, future):
+    req = request(destination_country=country)
+    if future:
+        req = req.model_copy(
+            update={
+                "start_date": NOW.date().replace(year=2027),
+                "end_date": NOW.date().replace(year=2027),
+            }
+        )
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: pytest.fail("unsupported forecast request"))
+    ) as client:
+        result = await GoogleWeatherSource(client, None, clock=lambda: NOW).search(
+            Specialist.WEATHER, req
+        )
+    assert result.status == "ok"
+    assert len(result.facts) == 1
+    fact = result.facts[0]
+    assert str(fact.source_url).endswith("/weather/coverage")
+    assert fact.weather.coverage == "unavailable"
+    assert fact.weather.maximum_celsius is None
+    assert len(fact.weather.missing_dates) == (1 if future else 3)
+    assert "does not provide daily forecasts" in " ".join(fact.weather.suggestions)
+    assert "closer to departure" not in " ".join(fact.weather.suggestions)
+
+
 @pytest.mark.parametrize("status", [403, 429, 500])
 async def test_provider_errors_remain_unavailable(status):
     async with httpx.AsyncClient(

@@ -14,7 +14,9 @@ from roamie_agents.contracts import RecommendationRequest, Specialist
 from roamie_agents.evidence import EvidenceBatch, MCPSource
 from roamie_agents.guidance import EntryGuidanceSource
 from roamie_agents.oauth import GatewayTransport, WorkloadTokens
+from roamie_agents.open_meteo import OpenMeteoSource
 from roamie_agents.weather import GoogleWeatherSource
+from roamie_agents.weather_failover import WeatherFailover
 
 
 class GatewaySecrets:
@@ -88,7 +90,16 @@ async def source_session(
                     tool_name=settings.mcp_tool,
                     schema_digest=settings.mcp_schema_digest,
                 ),
-                GoogleWeatherSource(weather_client, settings.weather_api_key),
+                WeatherFailover(
+                    OpenMeteoSource(
+                        weather_client,
+                        settings.open_meteo_api_key,
+                        self_hosted=settings.open_meteo_self_hosted,
+                    ),
+                    GoogleWeatherSource(weather_client, settings.weather_api_key),
+                )
+                if settings.open_meteo_self_hosted or settings.open_meteo_api_key is not None
+                else GoogleWeatherSource(weather_client, settings.weather_api_key),
             )
         finally:
             await session.close()
@@ -101,7 +112,7 @@ def workload_tokens(settings: Settings, agent: str) -> WorkloadTokens:
 
 
 class PlanningSources:
-    def __init__(self, travel: MCPSource, weather: GoogleWeatherSource) -> None:
+    def __init__(self, travel: MCPSource, weather: Source) -> None:
         self.travel = travel
         self.weather = weather
         self.entry = EntryGuidanceSource()
