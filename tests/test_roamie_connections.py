@@ -165,3 +165,97 @@ async def test_weather_uses_own_transport_without_gateway_credentials():
             ),
         )
     assert batch.status == "ok"
+
+
+async def test_open_meteo_key_selects_commercial_weather_without_other_credentials():
+    from datetime import date
+
+    from roamie_agents.contracts import Location
+
+    def reply(request):
+        assert request.url.host == "customer-api.open-meteo.com"
+        assert request.headers["X-Api-Key"] == "open-meteo-test"
+        assert "authorization" not in request.headers
+        assert "x-goog-api-key" not in request.headers
+        assert "open-meteo-test" not in str(request.url)
+        return httpx.Response(
+            200,
+            json={
+                "timezone": "Asia/Tokyo",
+                "daily_units": {
+                    "time": "iso8601",
+                    "temperature_2m_max": "°C",
+                    "temperature_2m_min": "°C",
+                    "precipitation_probability_max": "%",
+                    "uv_index_max": "",
+                },
+                "daily": {
+                    "time": [date.today().isoformat()],
+                    "temperature_2m_max": [25],
+                    "temperature_2m_min": [15],
+                    "precipitation_probability_max": [30],
+                    "uv_index_max": [4],
+                },
+            },
+        )
+
+    async with asynccontextmanager(source_session)(
+        settings(
+            mcp_schema_digest="1" * 64,
+            weather_api_key="google-test",
+            open_meteo_api_key="open-meteo-test",
+        ),
+        "private-gateway-token",
+        transport=httpx.MockTransport(lambda _: pytest.fail("weather is not an LLM request")),
+        weather_transport=httpx.MockTransport(reply),
+    ) as source:
+        result = await source.search(
+            Specialist.WEATHER,
+            RecommendationRequest(
+                prompt="Weather",
+                origin=Location(latitude=35.6, longitude=139.6),
+                destination_country="JP",
+                start_date=date.today(),
+                end_date=date.today(),
+            ),
+        )
+    assert result.status == "ok"
+    assert str(result.facts[0].source_url) == "https://open-meteo.com/"
+
+
+async def test_self_hosted_setting_needs_no_commercial_key_and_uses_google_failover():
+    from datetime import date
+
+    from roamie_agents.contracts import Location
+
+    calls = []
+
+    def reply(request):
+        calls.append(request.url.host)
+        if len(calls) == 1:
+            assert "x-api-key" not in request.headers
+            assert "x-goog-api-key" not in request.headers
+            return httpx.Response(429)
+        assert request.headers["x-goog-api-key"] == "google-test"
+        return httpx.Response(200, json={"forecastDays": []})
+
+    async with asynccontextmanager(source_session)(
+        settings(
+            mcp_schema_digest="1" * 64, weather_api_key="google-test", open_meteo_self_hosted=True
+        ),
+        "private-gateway-token",
+        transport=httpx.MockTransport(lambda _: pytest.fail("weather is not AI")),
+        weather_transport=httpx.MockTransport(reply),
+    ) as source:
+        result = await source.search(
+            Specialist.WEATHER,
+            RecommendationRequest(
+                prompt="Weather",
+                origin=Location(latitude=-37.81, longitude=144.96),
+                destination_country="AU",
+                start_date=date.today(),
+                end_date=date.today(),
+            ),
+        )
+    assert result.status == "ok"
+    assert calls == ["roamie-weather.roamie.svc.cluster.local", "weather.googleapis.com"]

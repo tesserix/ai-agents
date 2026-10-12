@@ -264,16 +264,26 @@ class PersonalTripManager:
                 "unverified eligibility, fees and missing traveller information."
             )
             try:
-                result = await self._manage(
-                    profile,
-                    current_revision,
-                    kind,
-                    request.model_copy(update={"plan_options": False, "prompt": prompt}),
-                    supporting,
-                    None,
-                    None,
-                )
+                async with asyncio.timeout(25):
+                    result = await self._manage(
+                        profile,
+                        current_revision,
+                        kind,
+                        request.model_copy(update={"plan_options": False, "prompt": prompt}),
+                        supporting,
+                        None,
+                        None,
+                    )
                 return result.response
+            except TimeoutError, WorkerCallError, SupervisionFailedError:
+                return TravelResponse(
+                    specialist=kind,
+                    status="unavailable",
+                    limitations=(
+                        "This planning check could not finish and has not been verified. "
+                        "Retry the check or consult official guidance before booking.",
+                    ),
+                )
             except TravelFailure as error:
                 if str(error) != "request_requires_clarification":
                     raise
