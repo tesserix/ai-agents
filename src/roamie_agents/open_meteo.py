@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, SecretStr, ValidationError
 from roamie_agents.contracts import Evidence, RecommendationRequest, Specialist, WeatherDetails
 from roamie_agents.evidence import EvidenceBatch
 
+PRIMARY_TIMEOUT_SECONDS = 35
 SOURCE = "https://open-meteo.com/"
 ATTRIBUTION = "Open-Meteo data (CC BY 4.0): https://creativecommons.org/licenses/by/4.0/"
 Temperature = Annotated[float, Field(ge=-100, le=70, allow_inf_nan=False)]
@@ -95,7 +96,7 @@ class OpenMeteoSource:
                         "precipitation_probability_max,uv_index_max",
                     },
                     headers=headers,
-                    timeout=8,
+                    timeout=PRIMARY_TIMEOUT_SECONDS if self.self_hosted else 8,
                 ) as response:
                     response.raise_for_status()
                     body = bytearray()
