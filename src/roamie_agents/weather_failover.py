@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from roamie_agents.api import Source
 from roamie_agents.contracts import RecommendationRequest, Specialist
 from roamie_agents.evidence import EvidenceBatch
+from roamie_agents.open_meteo import PRIMARY_TIMEOUT_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ class WeatherFailover:
         primary: Source,
         fallback: Source,
         *,
-        primary_seconds: float = 6,
+        primary_seconds: float = PRIMARY_TIMEOUT_SECONDS,
         fallback_seconds: float = 6,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
