@@ -18,9 +18,14 @@ from roamie_agents.contracts import (
     TravelResponse,
     project,
 )
-from roamie_agents.definitions import DEFINITIONS, budget_repair_definition, planning_definition
+from roamie_agents.definitions import DEFINITIONS, planning_definition
 from roamie_agents.exchange import CURRENCY_EXPONENTS, ExchangeQuote, ReferenceRate, compare_quotes
-from roamie_agents.planning import BudgetRepair, PlanSelection, prepare_options, validate_options
+from roamie_agents.planning import (
+    PlanSelection,
+    fit_budget_allocations,
+    prepare_options,
+    validate_options,
+)
 
 
 class TravelFailure(Exception):
@@ -132,6 +137,7 @@ class TravelService:
         if len(prompt.encode()) > 48000:
             raise TravelFailure("evidence_too_large")
         output: Selection | PlanSelection | None
+        budgets_resized = False
         if planning:
 
             class GroundedPlanSelection(PlanSelection):
@@ -151,53 +157,22 @@ class TravelService:
                         try:
                             _validate_plan(output, request, eligible, source_ids)
                         except ValueError as error:
-                            if (
-                                str(error) != "invalid_budget_tiers"
-                                or sum(
-                                    event.kind.value == "model_call" for event in plan_run.events
-                                )
-                                != 1
-                            ):
+                            if str(error) != "invalid_budget_tiers":
                                 raise TravelFailure(str(error), run_id=plan_run.id) from error
-                            remaining_input = min(8000, 32000 - plan_run.usage.input_tokens)
-                            remaining_output = min(1000, 8000 - plan_run.usage.output_tokens)
-                            if min(remaining_input, remaining_output) <= 0:
-                                raise TravelFailure(
-                                    "planning_budget_exhausted", run_id=plan_run.id
-                                ) from error
-                            repair = await runner.run(
-                                budget_repair_definition(remaining_input, remaining_output),
-                                json.dumps(
-                                    {
-                                        "ceiling_minor": request.budget_minor,
-                                        "currency": request.currency,
-                                        "travellers": request.travellers,
-                                        "start_date": str(request.start_date),
-                                        "end_date": str(request.end_date),
-                                        "options": [
-                                            option.model_dump(mode="json", exclude={"days"})
-                                            for option in output.options
-                                        ],
-                                    }
-                                ),
-                                tenant="roamie",
-                            )
-                            if repair.state.value != "completed" or not isinstance(
-                                repair.output, BudgetRepair
-                            ):
-                                raise TravelFailure(
-                                    "budget_repair_failed", run_id=repair.id
-                                ) from error
-                            output = output.model_copy(
-                                update={
-                                    "options": tuple(
-                                        option.model_copy(update={"budget": budget})
-                                        for option, budget in zip(
-                                            output.options, repair.output.budgets, strict=True
+                            try:
+                                output = output.model_copy(
+                                    update={
+                                        "options": fit_budget_allocations(
+                                            output.options, request.budget_minor
                                         )
-                                    )
-                                }
-                            )
+                                    }
+                                )
+                            except ValueError as allocation_error:
+                                raise TravelFailure(
+                                    str(allocation_error), run_id=plan_run.id
+                                ) from allocation_error
+                            budgets_resized = True
+
             except TimeoutError as error:
                 raise TravelFailure("planning_timeout") from error
             state, run_id = plan_run.state.value, plan_run.id
@@ -236,6 +211,14 @@ class TravelService:
                 limitations=(
                     "Proposed visits and AI budget allocations; not live prices or bookings.",
                     "International flights excluded. Confirm hotels, routes and opening hours.",
+                    *(
+                        (
+                            "Budget allocations were resized to fit your ceiling; "
+                            "these are spending targets, not price quotes.",
+                        )
+                        if budgets_resized
+                        else ()
+                    ),
                 ),
             )
         if state != "completed" or not isinstance(output, Selection):

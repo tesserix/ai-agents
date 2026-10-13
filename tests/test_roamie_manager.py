@@ -576,6 +576,7 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(
 
     called = []
     all_workers_started = asyncio.Event()
+    planner_started = asyncio.Event()
     advisory_deadlines = {}
     cancelled = []
     original_timeout = asyncio.timeout
@@ -596,6 +597,8 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(
         )
         kind = incoming.context.specialist
         called.append(kind)
+        if kind == Specialist.TRIP:
+            planner_started.set()
         if advisory_decision == "unavailable" and kind != Specialist.TRIP:
             return httpx.Response(503)
         if advisory_decision == "timeout" and kind != Specialist.TRIP:
@@ -657,7 +660,14 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(
             }
         )
     )
-    model = ScriptedProvider(
+
+    class RequestReviewer(ScriptedProvider):
+        async def complete(self, request):
+            if planning and not self.requests:
+                await asyncio.wait_for(planner_started.wait(), timeout=1)
+            return await super().complete(request)
+
+    model = RequestReviewer(
         *(
             [approved for _ in range(6)]
             if advisory_decision != "amend"
@@ -1073,3 +1083,72 @@ async def test_planning_advisories_preserve_provider_warnings_and_expiry(age_hou
         assert advisory.status == ("ok" if age_hours <= ttl else "unavailable")
         assert advisory.recommendations == ((project(fact, None),) if age_hours <= ttl else ())
         assert advisory.run_id is None
+
+
+@pytest.mark.parametrize("cancel_request", [False, True])
+async def test_unapproved_planning_draft_is_cancelled_and_never_released(cancel_request):
+    import asyncio
+
+    from test_roamie_planning import evidence, request
+
+    started = asyncio.Event()
+    stopped = asyncio.Event()
+
+    async def reply(_):
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            stopped.set()
+
+    class RequestReviewer(ScriptedProvider):
+        async def complete(self, message):
+            await asyncio.wait_for(started.wait(), timeout=1)
+            if cancel_request:
+                await asyncio.Event().wait()
+            return await super().complete(message)
+
+    model = RequestReviewer(
+        ModelResponse(
+            content=json.dumps(
+                {
+                    "decision": "reject",
+                    "confidence": 1.0,
+                    "summary": "Conflicting request",
+                    "issues": [],
+                }
+            )
+        )
+    )
+    async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as http:
+        manager = PersonalTripManager(
+            workers={
+                Specialist.TRIP: WorkerEndpoint(
+                    name="roamie-trip-planner",
+                    url="https://gateway.example.org/a2a/v1/roamie-trip-planner",
+                )
+            },
+            client=A2AWorkerClient(api_key=SecretStr("fixture"), timeout=5, client=http),
+            supervisor=SupervisorService(provider=model, definition=manager_definition()),
+            identity_key=SecretStr("a" * 32),
+            delegation_key=SecretStr("d" * 32),
+        )
+        task = asyncio.create_task(
+            manager.manage(
+                profile=Profile(subject="user", trip_id="trip", revision="1", currency="AUD"),
+                current_revision=lambda: "1",
+                specialist=Specialist.TRIP,
+                request=request(),
+                facts=[evidence().model_copy(update={"observed_at": datetime.now(UTC)})],
+            )
+        )
+        if cancel_request:
+            await asyncio.wait_for(started.wait(), timeout=1)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        else:
+            with pytest.raises(TravelFailure, match="request_requires_clarification"):
+                await task
+    assert stopped.is_set()
+    assert len(model.requests) == (0 if cancel_request else 1)

@@ -401,15 +401,6 @@ class PersonalTripManager:
                 "entry eligibility or visa fees; never imply those facts are verified. "
                 "Continue enforcing every applicable saved profile constraint."
             )
-        preflight = await self._supervisor.supervise(
-            task=review_task,
-            stage="request",
-            answer=bounded.prompt,
-            context=json.dumps(request_context),
-            tenant="roamie",
-        )
-        if preflight.verdict.decision != "approve" or preflight.verdict.confidence < 0.8:
-            raise TravelFailure("request_requires_clarification")
         delegation = self._delegations.request(
             manager_id=self.manager_id(profile),
             revision=profile.revision,
@@ -421,22 +412,39 @@ class PersonalTripManager:
                 exchange_quotes=exchange_quotes or [],
             ),
         )
-        checks = (
-            asyncio.create_task(
-                self._planning_advisories(profile, current_revision, bounded, facts)
-            )
-            if specialist == Specialist.TRIP
+        draft = (
+            asyncio.create_task(self._client.send(endpoint, delegation.model_dump_json()))
+            if specialist == Specialist.TRIP and bounded.plan_options
             else None
         )
+        checks: asyncio.Task[list[TravelResponse]] | None = None
         try:
-            reply = await self._client.send(endpoint, delegation.model_dump_json())
+            preflight = await self._supervisor.supervise(
+                task=review_task,
+                stage="request",
+                answer=bounded.prompt,
+                context=json.dumps(request_context),
+                tenant="roamie",
+            )
+            if preflight.verdict.decision != "approve" or preflight.verdict.confidence < 0.8:
+                raise TravelFailure("request_requires_clarification")
+            if specialist == Specialist.TRIP:
+                checks = asyncio.create_task(
+                    self._planning_advisories(profile, current_revision, bounded, facts)
+                )
+            reply = (
+                await draft
+                if draft is not None
+                else await self._client.send(endpoint, delegation.model_dump_json())
+            )
             if checks is not None:
                 advisories = await checks
         finally:
-            if checks is not None:
-                if not checks.done():
-                    checks.cancel()
-                await asyncio.gather(checks, return_exceptions=True)
+            for task in (draft, checks):
+                if task is not None:
+                    if not task.done():
+                        task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
         if reply.state != "completed" or len(reply.text.encode()) > 65536:
             raise TravelFailure("invalid_worker_reply")
         response = self._delegations.verify_response(reply.text, delegation)
