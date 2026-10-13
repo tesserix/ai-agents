@@ -10,6 +10,23 @@ ADK_BASE = (
 )
 
 
+def test_manager_image_security_gates_container_publication() -> None:
+    jobs = yaml.safe_load(PUBLISH_WORKFLOW.read_text())["jobs"]
+
+    assert set(jobs["image"]["needs"]) == {"verify", "manager-image-security"}
+    security = jobs["manager-image-security"]
+    assert security["permissions"] == {"contents": "read", "packages": "read"}
+    build = next(step for step in security["steps"] if "build-push-action" in step.get("uses", ""))
+    assert build["with"]["target"] == "roamie-manager-runtime"
+    assert build["with"]["load"] is True
+    scripts = "\n".join(step.get("run", "") for step in security["steps"])
+    assert "smoke_roamie_manager_image.py" in scripts
+    assert "--exit-code 1" in scripts
+    assert "--severity MEDIUM,HIGH,CRITICAL" in scripts
+    assert "--ignorefile /dev/null" in scripts
+    assert "--ignore-unfixed" not in scripts
+
+
 def test_registry_deploy_key_uses_mesh_safe_header() -> None:
     workflow = PUBLISH_WORKFLOW.read_text()
 
