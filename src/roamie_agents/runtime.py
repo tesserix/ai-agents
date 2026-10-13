@@ -18,9 +18,9 @@ from roamie_agents.contracts import (
     TravelResponse,
     project,
 )
-from roamie_agents.definitions import DEFINITIONS, planning_definition
+from roamie_agents.definitions import DEFINITIONS, budget_repair_definition, planning_definition
 from roamie_agents.exchange import CURRENCY_EXPONENTS, ExchangeQuote, ReferenceRate, compare_quotes
-from roamie_agents.planning import PlanSelection, prepare_options, validate_options
+from roamie_agents.planning import BudgetRepair, PlanSelection, prepare_options, validate_options
 
 
 class TravelFailure(Exception):
@@ -117,7 +117,8 @@ class TravelService:
             class GroundedPlanSelection(PlanSelection):
                 @model_validator(mode="after")
                 def grounded(self) -> Self:
-                    _validate_plan(self, request, eligible, source_ids)
+                    # Repair allocation errors without regenerating already grounded visits.
+                    _validate_plan(self, request, eligible, source_ids, validate_budgets=False)
                     return self
 
             try:
@@ -125,9 +126,61 @@ class TravelService:
                     plan_run = await runner.run(
                         planning_definition(GroundedPlanSelection), prompt, tenant="roamie"
                     )
+                    output = plan_run.output
+                    if plan_run.state.value == "completed" and output is not None:
+                        try:
+                            _validate_plan(output, request, eligible, source_ids)
+                        except ValueError as error:
+                            if (
+                                str(error) != "invalid_budget_tiers"
+                                or sum(
+                                    event.kind.value == "model_call" for event in plan_run.events
+                                )
+                                != 1
+                            ):
+                                raise TravelFailure(str(error), run_id=plan_run.id) from error
+                            remaining_input = min(8000, 32000 - plan_run.usage.input_tokens)
+                            remaining_output = min(1000, 8000 - plan_run.usage.output_tokens)
+                            if min(remaining_input, remaining_output) <= 0:
+                                raise TravelFailure(
+                                    "planning_budget_exhausted", run_id=plan_run.id
+                                ) from error
+                            repair = await runner.run(
+                                budget_repair_definition(remaining_input, remaining_output),
+                                json.dumps(
+                                    {
+                                        "ceiling_minor": request.budget_minor,
+                                        "currency": request.currency,
+                                        "travellers": request.travellers,
+                                        "start_date": str(request.start_date),
+                                        "end_date": str(request.end_date),
+                                        "options": [
+                                            option.model_dump(mode="json", exclude={"days"})
+                                            for option in output.options
+                                        ],
+                                    }
+                                ),
+                                tenant="roamie",
+                            )
+                            if repair.state.value != "completed" or not isinstance(
+                                repair.output, BudgetRepair
+                            ):
+                                raise TravelFailure(
+                                    "budget_repair_failed", run_id=repair.id
+                                ) from error
+                            output = output.model_copy(
+                                update={
+                                    "options": tuple(
+                                        option.model_copy(update={"budget": budget})
+                                        for option, budget in zip(
+                                            output.options, repair.output.budgets, strict=True
+                                        )
+                                    )
+                                }
+                            )
             except TimeoutError as error:
                 raise TravelFailure("planning_timeout") from error
-            output, state, run_id = plan_run.output, plan_run.state.value, plan_run.id
+            state, run_id = plan_run.state.value, plan_run.id
         else:
             selection_run = await runner.run(DEFINITIONS[specialist], prompt, tenant="roamie")
             output, state, run_id = (
@@ -249,6 +302,8 @@ def _validate_plan(
     request: RecommendationRequest,
     eligible: Sequence[Evidence],
     source_ids: dict[str, str],
+    *,
+    validate_budgets: bool = True,
 ) -> PlanSelection:
     locations = {fact.id: fact.location for fact in eligible if fact.location}
     output = output.model_copy(
@@ -267,6 +322,7 @@ def _validate_plan(
         destinations=[stay.destination for stay in request.stays for _ in range(stay.days)] or None,
         evidence_destinations={fact.id: fact.destination for fact in eligible},
         locations=locations,
+        validate_budgets=validate_budgets,
     )
     lodging_ids = {fact.id for fact in eligible if fact.place_kind == "accommodation"}
     if any(key not in lodging_ids for option in output.options for key in option.accommodation_ids):
