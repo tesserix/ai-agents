@@ -31,6 +31,24 @@ from roamie_agents.planning import validate_options
 from roamie_agents.runtime import TravelFailure, TravelService
 
 
+def review_json(value: object) -> str:
+    def normalize(item: object) -> object:
+        if isinstance(item, dict):
+            return {
+                key: round(child, 6)
+                if key in ("latitude", "longitude") and isinstance(child, float)
+                else normalize(child)
+                for key, child in item.items()
+            }
+        if isinstance(item, list):
+            return [normalize(child) for child in item]
+        return item
+
+    # Long coordinate fractions can match card-number detectors and corrupt JSON.
+    # Normalize only the review copy; signed worker payloads retain full precision.
+    return json.dumps(normalize(value))
+
+
 class Profile(Contract):
     subject: str = Field(min_length=1, max_length=256)
     trip_id: str = Field(min_length=1, max_length=120)
@@ -341,7 +359,7 @@ class PersonalTripManager:
         ]
         if len(candidates) > 40 or len({fact.id for fact in candidates}) != len(candidates):
             raise TravelFailure("invalid_evidence")
-        context = json.dumps(
+        context = review_json(
             {
                 "planning_checks": [item.model_dump(mode="json") for item in advisories],
                 "preferences": bounded.model_dump(mode="json", exclude={"prompt"}),
@@ -378,7 +396,7 @@ class PersonalTripManager:
             task=review_task,
             stage="request",
             answer=bounded.prompt,
-            context=json.dumps(request_context),
+            context=review_json(request_context),
             tenant="roamie",
         )
         if preflight.verdict.decision != "approve" or preflight.verdict.confidence < 0.8:
@@ -484,12 +502,12 @@ class PersonalTripManager:
             raise TravelFailure("unexpected_trip_options")
         review_context = json.loads(context)
         review_context["planning_checks"] = [item.model_dump(mode="json") for item in advisories]
-        context = json.dumps(review_context)
+        context = review_json(review_context)
         if len(context.encode()) > 40000:
             raise TravelFailure("context_too_large")
         reviewed = await self._supervisor.supervise(
             task=bounded.prompt,
-            answer=response.model_dump_json(),
+            answer=review_json(response.model_dump(mode="json")),
             context=context,
             tenant="roamie",
         )
