@@ -22,7 +22,7 @@ def test_manager_image_security_gates_container_publication() -> None:
     scripts = "\n".join(step.get("run", "") for step in security["steps"])
     assert "smoke_roamie_manager_image.py" in scripts
     assert "--exit-code 1" in scripts
-    assert "--severity HIGH,CRITICAL" in scripts
+    assert "--severity MEDIUM,HIGH,CRITICAL" in scripts
     assert "--ignorefile /dev/null" in scripts
     assert "--ignore-unfixed" not in scripts
 

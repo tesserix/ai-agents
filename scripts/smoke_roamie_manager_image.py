@@ -6,6 +6,9 @@ import os
 import shutil
 import sqlite3
 import ssl
+import sys
+import sysconfig
+import tomllib
 import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -14,6 +17,7 @@ from zoneinfo import ZoneInfo
 import httpx
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from pydantic import SecretStr
+from temporalio.runtime import Runtime, TelemetryConfig
 from tesserix_adk.testing import ScriptedProvider
 
 from orchestrator_agent.supervision import SupervisorService
@@ -27,12 +31,21 @@ def check_runtime() -> None:
     if os.getuid() != 10001:
         raise RuntimeError("manager must run as UID 10001")
     forbidden = [
-        name for name in ("sh", "bash", "curl", "mount", "perl", "apt", "pip") if shutil.which(name)
+        name
+        for name in ("sh", "bash", "curl", "mount", "perl", "apt", "apk", "pip")
+        if shutil.which(name)
     ]
     if forbidden:
         raise RuntimeError(f"unexpected runtime tools: {forbidden}")
-    if Path("/usr/local/lib/python3.14/ensurepip").exists():
+    if sys.version_info[:2] != (3, 14):
+        raise RuntimeError("manager requires the qualified Python 3.14 ABI")
+    if (Path(sysconfig.get_path("stdlib")) / "ensurepip").exists():
         raise RuntimeError("bundled installer must be build-only")
+    bridge = Path("/opt/adk-venv/lib/python3.14/site-packages/temporalio/bridge")
+    packages = tomllib.loads((bridge / "Cargo.lock").read_text())["package"]
+    if [package["version"] for package in packages if package["name"] == "rustls"] != ["0.23.45"]:
+        raise RuntimeError("Temporal native dependency inventory must contain patched rustls")
+    Runtime(telemetry=TelemetryConfig())
     if not ssl.create_default_context().get_ca_certs():
         raise RuntimeError("TLS trust store is missing")
     raw = b"synthetic-runtime-probe"

@@ -30,7 +30,7 @@ jobs:
       contents: read
       packages: read
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -51,11 +51,11 @@ jobs:
             --pids-limit 128 --memory 1g --cpus 1 \
             --entrypoint /opt/adk-venv/bin/python roamie-manager-security:ci \
             - < scripts/smoke_roamie_manager_image.py
-      - name: Reject HIGH and CRITICAL image findings
+      - name: Reject MEDIUM, HIGH and CRITICAL image findings
         run: |
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock:ro \
             aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
-            image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL \
+            image --scanners vuln --exit-code 1 --severity MEDIUM,HIGH,CRITICAL \
             --ignorefile /dev/null roamie-manager-security:ci
 
   image:
@@ -103,7 +103,9 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
+          cache-from: |
+            type=gha
+            type=gha,scope=manager-security
           cache-to: type=gha,mode=max
           provenance: mode=max
           sbom: true
