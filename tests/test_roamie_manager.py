@@ -704,6 +704,15 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(
     assert {fact["category"] for fact in final_context["evidence"]} == {
         kind.value for kind in kinds
     }
+    if planning:
+        for review, advisory in zip(
+            final_context["planning_checks"], result.advisories, strict=True
+        ):
+            assert review["recommendations"] == [item.id for item in advisory.recommendations]
+            assert all(
+                key in {fact["id"] for fact in final_context["evidence"]}
+                for key in review["recommendations"]
+            )
     assert set(called) == (set(kinds) if advisory_decision != "amend" else {Specialist.TRIP})
     if advisory_decision != "approve":
         assert all(item.status == "unavailable" for item in result.advisories)

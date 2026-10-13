@@ -107,6 +107,26 @@ class TravelService:
                     }
                     for index, fact in enumerate(eligible)
                 ],
+                **(
+                    {
+                        "BUDGET": {
+                            "currency": request.currency,
+                            "minor_units_per_major_unit": 10
+                            ** CURRENCY_EXPONENTS[request.currency],
+                            "maximum_total_per_option_minor": request.budget_minor,
+                            "suggested_totals_minor": {
+                                tier: request.budget_minor * percent // 100
+                                for tier, percent in (
+                                    ("budget", 60),
+                                    ("balanced", 80),
+                                    ("premium", 95),
+                                )
+                            },
+                        }
+                    }
+                    if planning and request.budget_minor is not None
+                    else {}
+                ),
             }
         )
         if len(prompt.encode()) > 48000:

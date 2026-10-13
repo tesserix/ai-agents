@@ -366,3 +366,20 @@ async def test_budget_repair_does_not_add_a_third_model_call_after_grounding_rep
             Specialist.TRIP, request(), facts=[evidence()]
         )
     assert len(provider.requests) == 2
+
+
+async def test_planner_receives_independent_tier_targets_below_the_party_ceiling():
+    import json
+
+    provider = ScriptedProvider(ModelResponse(content=json.dumps(proposal())))
+    await TravelService(provider=provider, clock=lambda: NOW).recommend(
+        Specialist.TRIP, request(), facts=[evidence()]
+    )
+    prompt = json.loads(provider.requests[0].messages[-1].content[0].text)
+    assert prompt["BUDGET"]["maximum_total_per_option_minor"] == 8000
+    assert prompt["BUDGET"]["suggested_totals_minor"] == {
+        "budget": 4800,
+        "balanced": 6400,
+        "premium": 7600,
+    }
+    assert prompt["BUDGET"]["minor_units_per_major_unit"] == 100

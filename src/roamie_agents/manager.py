@@ -488,8 +488,10 @@ class PersonalTripManager:
         review_context["planning_checks"] = [item.model_dump(mode="json") for item in advisories]
         review_answer = response.model_dump(mode="json")
         if bounded.plan_options:
+            for review, advisory in zip(review_context["planning_checks"], advisories, strict=True):
+                review["recommendations"] = [item.id for item in advisory.recommendations]
             review_context["evidence"] = [
-                fact.model_dump(mode="json")
+                fact.model_dump(mode="json", exclude_none=True)
                 for fact in candidates
                 if fact.id in {item.id for item in response.recommendations}
                 or fact.category in (Specialist.WEATHER, Specialist.ENTRY)
