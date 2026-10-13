@@ -186,7 +186,12 @@ resource(
                 }
             ]
         },
-        "policies": {"ai": {"routes": {"/v1/chat/completions": "Completions"}}},
+        "policies": {
+            "ai": {
+                "defaults": [{"field": "reasoning_effort", "value": "low"}],
+                "routes": {"/v1/chat/completions": "Completions"},
+            }
+        },
     },
 )
 resource(

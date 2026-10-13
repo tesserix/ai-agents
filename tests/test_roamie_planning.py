@@ -163,10 +163,10 @@ async def test_rejected_plan_records_terminal_run_without_model_or_profile_paylo
     service = TravelService(
         provider=ScriptedProvider(ModelResponse(content=json.dumps(output))), clock=lambda: NOW
     )
-    with capture_logs() as logs, pytest.raises(TravelFailure, match="invalid_planning_stop"):
+    with capture_logs() as logs, pytest.raises(TravelFailure, match="model_failed"):
         await service.recommend(Specialist.TRIP, request(), facts=[evidence()])
     event = next(item for item in logs if item["event"] == "roamie_model_finished")
-    assert event["state"] == "completed"
+    assert event["state"] == "failed"
     assert event["specialist"] == "trip-planner"
     assert event["run_id"]
     assert "private-hallucination" not in json.dumps(logs)
@@ -257,3 +257,69 @@ def test_validation_rejects_plans_that_skip_distance_transit():
                 "lake": Location(latitude=21.1184, longitude=105.8),
             },
         )
+
+
+async def test_invalid_budget_draft_is_repaired_once_within_the_same_run():
+    import json
+
+    invalid = proposal()
+    invalid["options"][2]["budget"]["food_minor"] = 10000
+    provider = ScriptedProvider(
+        ModelResponse(content=json.dumps(invalid)), ModelResponse(content=json.dumps(proposal()))
+    )
+    result = await TravelService(provider=provider, clock=lambda: NOW).recommend(
+        Specialist.TRIP, request(), facts=[evidence()]
+    )
+    assert [option.budget.total_minor for option in result.trip_options] == [2000, 4000, 6000]
+    assert len(provider.requests) == 2
+
+
+async def test_invalid_budget_draft_stops_after_one_failed_repair():
+    import json
+
+    invalid = proposal()
+    invalid["options"][2]["budget"]["food_minor"] = 10000
+    provider = ScriptedProvider(*[ModelResponse(content=json.dumps(invalid)) for _ in range(3)])
+    with pytest.raises(TravelFailure):
+        await TravelService(provider=provider, clock=lambda: NOW).recommend(
+            Specialist.TRIP, request(), facts=[evidence()]
+        )
+    assert len(provider.requests) == 2
+
+
+async def test_planning_deadline_cancels_a_stuck_model_call(monkeypatch):
+    import asyncio
+
+    import roamie_agents.runtime as runtime
+
+    cancelled = asyncio.Event()
+
+    class StuckProvider(ScriptedProvider):
+        async def complete(self, request):
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+
+    timeout = asyncio.timeout
+    monkeypatch.setattr(runtime.asyncio, "timeout", lambda _: timeout(0.02))
+    with pytest.raises(TravelFailure, match="planning_timeout"):
+        await TravelService(provider=StuckProvider(), clock=lambda: NOW).recommend(
+            Specialist.TRIP, request(), facts=[evidence()]
+        )
+    assert cancelled.is_set()
+
+
+async def test_planner_evidence_omits_null_fields_without_losing_source_data():
+    import json
+
+    provider = ScriptedProvider(ModelResponse(content=json.dumps(proposal())))
+    await TravelService(provider=provider, clock=lambda: NOW).recommend(
+        Specialist.TRIP, request(), facts=[evidence()]
+    )
+    payload = json.loads(provider.requests[0].messages[-1].content[0].text)
+    sent = payload["EVIDENCE"][0]
+    assert "weather" not in sent
+    assert "cost_minor" not in sent
+    sent["id"] = evidence().id
+    assert Evidence.model_validate(sent) == evidence()

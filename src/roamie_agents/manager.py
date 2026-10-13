@@ -361,6 +361,8 @@ class PersonalTripManager:
                 for fact in candidates
                 if fact.category not in (Specialist.WEATHER, Specialist.ENTRY)
             ]
+        if bounded.plan_options:
+            request_context["evidence"] = []
         review_task = (
             "Check whether the proposed travel request is compatible with the confirmed "
             "profile constraints. This is a pre-execution review, not a completed answer."
@@ -484,12 +486,21 @@ class PersonalTripManager:
             raise TravelFailure("unexpected_trip_options")
         review_context = json.loads(context)
         review_context["planning_checks"] = [item.model_dump(mode="json") for item in advisories]
+        review_answer = response.model_dump(mode="json")
+        if bounded.plan_options:
+            review_context["evidence"] = [
+                fact.model_dump(mode="json")
+                for fact in candidates
+                if fact.id in {item.id for item in response.recommendations}
+                or fact.category in (Specialist.WEATHER, Specialist.ENTRY)
+            ]
+            review_answer["recommendations"] = [item.id for item in response.recommendations]
         context = json.dumps(review_context)
         if len(context.encode()) > 40000:
             raise TravelFailure("context_too_large")
         reviewed = await self._supervisor.supervise(
             task=bounded.prompt,
-            answer=response.model_dump_json(),
+            answer=json.dumps(review_answer),
             context=context,
             tenant="roamie",
         )

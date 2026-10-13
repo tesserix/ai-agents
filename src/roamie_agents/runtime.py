@@ -1,8 +1,11 @@
+import asyncio
 import json
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
+from typing import Self
 
 import structlog
+from pydantic import model_validator
 from tesserix_adk.core import ModelProvider
 from tesserix_adk.guardrails import InjectionGuard
 from tesserix_adk.runtime import AgentRunner
@@ -98,7 +101,10 @@ class TravelService:
             {
                 "REQUEST": request.model_dump(mode="json"),
                 "EVIDENCE": [
-                    {**fact.model_dump(mode="json"), "id": f"p{index}" if planning else fact.id}
+                    {
+                        **fact.model_dump(mode="json", exclude_none=planning),
+                        "id": f"p{index}" if planning else fact.id,
+                    }
                     for index, fact in enumerate(eligible)
                 ],
             }
@@ -107,7 +113,20 @@ class TravelService:
             raise TravelFailure("evidence_too_large")
         output: Selection | PlanSelection | None
         if planning:
-            plan_run = await runner.run(planning_definition(), prompt, tenant="roamie")
+
+            class GroundedPlanSelection(PlanSelection):
+                @model_validator(mode="after")
+                def grounded(self) -> Self:
+                    _validate_plan(self, request, eligible, source_ids)
+                    return self
+
+            try:
+                async with asyncio.timeout(50):
+                    plan_run = await runner.run(
+                        planning_definition(GroundedPlanSelection), prompt, tenant="roamie"
+                    )
+            except TimeoutError as error:
+                raise TravelFailure("planning_timeout") from error
             output, state, run_id = plan_run.output, plan_run.state.value, plan_run.id
         else:
             selection_run = await runner.run(DEFINITIONS[specialist], prompt, tenant="roamie")
@@ -120,28 +139,8 @@ class TravelService:
             "roamie_model_finished", specialist=specialist.value, run_id=run_id, state=state
         )
         if planning and state == "completed" and isinstance(output, PlanSelection):
-            locations = {fact.id: fact.location for fact in eligible if fact.location}
-            output = output.model_copy(
-                update={"options": prepare_options(output.options, source_ids, locations)}
-            )
             try:
-                validate_options(
-                    output.options,
-                    start=request.start_date,
-                    end=request.end_date,
-                    evidence_ids={
-                        fact.id
-                        for fact in eligible
-                        if fact.category not in (Specialist.WEATHER, Specialist.ENTRY)
-                    },
-                    ceiling=request.budget_minor,
-                    destinations=[
-                        stay.destination for stay in request.stays for _ in range(stay.days)
-                    ]
-                    or None,
-                    evidence_destinations={fact.id: fact.destination for fact in eligible},
-                    locations=locations,
-                )
+                output = _validate_plan(output, request, eligible, source_ids)
             except ValueError as error:
                 raise TravelFailure(str(error), run_id=run_id, state=state) from error
             selected_ids = {
@@ -153,13 +152,6 @@ class TravelService:
             selected_ids.update(
                 key for option in output.options for key in option.accommodation_ids
             )
-            lodging_ids = {fact.id for fact in eligible if fact.place_kind == "accommodation"}
-            if any(
-                key not in lodging_ids
-                for option in output.options
-                for key in option.accommodation_ids
-            ):
-                raise TravelFailure("unsupported_accommodation", run_id=run_id, state=state)
             return TravelResponse(
                 status="ok",
                 specialist=specialist,
@@ -250,3 +242,33 @@ class TravelService:
         if specialist == Specialist.MEMORIES:
             return request.photo_consent and fact.photo_id in request.photo_ids
         return True
+
+
+def _validate_plan(
+    output: PlanSelection,
+    request: RecommendationRequest,
+    eligible: Sequence[Evidence],
+    source_ids: dict[str, str],
+) -> PlanSelection:
+    locations = {fact.id: fact.location for fact in eligible if fact.location}
+    output = output.model_copy(
+        update={"options": prepare_options(output.options, source_ids, locations)}
+    )
+    validate_options(
+        output.options,
+        start=request.start_date,
+        end=request.end_date,
+        evidence_ids={
+            fact.id
+            for fact in eligible
+            if fact.category not in (Specialist.WEATHER, Specialist.ENTRY)
+        },
+        ceiling=request.budget_minor,
+        destinations=[stay.destination for stay in request.stays for _ in range(stay.days)] or None,
+        evidence_destinations={fact.id: fact.destination for fact in eligible},
+        locations=locations,
+    )
+    lodging_ids = {fact.id for fact in eligible if fact.place_kind == "accommodation"}
+    if any(key not in lodging_ids for option in output.options for key in option.accommodation_ids):
+        raise ValueError("unsupported_accommodation")
+    return output
