@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import json
 
 import pytest
@@ -64,6 +66,30 @@ def test_reply_is_bound_to_exact_request_and_cannot_be_substituted():
     body = json.loads(reply.model_dump_json())
     body["response"]["specialist"] = "shopping"
     with pytest.raises(DelegationError):
+        signer.verify_response(json.dumps(body), request)
+
+
+def test_signed_older_response_is_verified_before_new_optional_defaults_are_added():
+    signer, request = exchange()
+    output = TravelResponse(status="no_matches", specialist=Specialist.FOOD)
+    body = json.loads(signer.response(request, output).model_dump_json())
+    body["response"].pop("questions")
+    body.pop("signature")
+    received = json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+    body["signature"] = hmac.new(b"d" * 32, b"response\x00" + received, hashlib.sha256).hexdigest()
+    raw = json.dumps(body)
+    assert signer.verify_response(raw, request) == output
+    expired = Delegations(key=SecretStr("d" * 32), clock=lambda: 220)
+    with pytest.raises(DelegationError, match="expired delegation"):
+        expired.verify_response(raw, request)
+    _, another_request = exchange()
+    with pytest.raises(DelegationError, match="response identity mismatch"):
+        signer.verify_response(raw, another_request)
+    body["response"]["questions"] = []
+    with pytest.raises(DelegationError, match="invalid delegation signature"):
+        signer.verify_response(json.dumps(body), request)
+    body["response"]["unverified_admin"] = True
+    with pytest.raises(DelegationError, match="invalid delegated response"):
         signer.verify_response(json.dumps(body), request)
 
 

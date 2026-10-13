@@ -63,16 +63,23 @@ class Delegations:
         self._key = key
         self._clock = clock
 
-    def _signature(self, message: Contract, purpose: str) -> str:
+    def _signature(self, content: bytes, purpose: str) -> str:
         return hmac.new(
             self._key.get_secret_value().encode(),
-            purpose.encode() + b"\x00" + canonical(message),
+            purpose.encode() + b"\x00" + content,
             hashlib.sha256,
         ).hexdigest()
 
-    def _check(self, message: DelegatedRequest | DelegatedResponse, purpose: str) -> None:
+    def _check(
+        self,
+        message: DelegatedRequest | DelegatedResponse,
+        purpose: str,
+        *,
+        received: bytes | None = None,
+    ) -> None:
         context = message.context
-        if not hmac.compare_digest(message.signature, self._signature(message, purpose)):
+        content = canonical(message) if received is None else received
+        if not hmac.compare_digest(message.signature, self._signature(content, purpose)):
             raise DelegationError("invalid delegation signature")
         if not context.issued_at <= self._clock() < context.expires_at <= context.issued_at + 120:
             raise DelegationError("expired delegation")
@@ -93,7 +100,7 @@ class Delegations:
             payload=payload,
             signature="0" * 64,
         )
-        return value.model_copy(update={"signature": self._signature(value, "request")})
+        return value.model_copy(update={"signature": self._signature(canonical(value), "request")})
 
     def verify_request(
         self, raw: str, specialist: Specialist
@@ -129,14 +136,17 @@ class Delegations:
             response=response,
             signature="0" * 64,
         )
-        return value.model_copy(update={"signature": self._signature(value, "response")})
+        return value.model_copy(update={"signature": self._signature(canonical(value), "response")})
 
     def verify_response(self, raw: str, request: DelegatedRequest) -> TravelResponse:
         try:
             value = DelegatedResponse.model_validate_json(raw)
         except ValidationError as error:
             raise DelegationError("invalid delegated response") from error
-        self._check(value, "response")
+        received = json.loads(raw)
+        received.pop("signature")
+        content = json.dumps(received, sort_keys=True, separators=(",", ":")).encode()
+        self._check(value, "response", received=content)
         if (
             value.context != request.context
             or value.request_digest != hashlib.sha256(canonical(request)).hexdigest()
