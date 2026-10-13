@@ -546,8 +546,11 @@ async def test_manager_independently_validates_three_plans_before_final_review(c
             ]
 
 
-@pytest.mark.parametrize("planning", [False, True])
-@pytest.mark.parametrize("advisory_decision", ["approve", "amend", "unavailable", "timeout"])
+@pytest.mark.parametrize(
+    ("planning", "advisory_decision"),
+    [(False, value) for value in ("approve", "amend", "unavailable", "timeout")]
+    + [(True, "provided")],
+)
 async def test_trip_consults_weather_and_entry_before_itinerary_review(
     planning, advisory_decision, monkeypatch
 ):
@@ -713,8 +716,18 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(
                 key in {fact["id"] for fact in final_context["evidence"]}
                 for key in review["recommendations"]
             )
-    assert set(called) == (set(kinds) if advisory_decision != "amend" else {Specialist.TRIP})
-    if advisory_decision != "approve":
+    assert set(called) == (
+        set(kinds) if advisory_decision not in ("amend", "provided") else {Specialist.TRIP}
+    )
+    if advisory_decision == "provided":
+        assert len(model.requests) == 2
+        for advisory in result.advisories:
+            assert advisory.status == "ok"
+            assert advisory.run_id is None
+            assert advisory.recommendations == tuple(
+                project(fact, None) for fact in facts if fact.category == advisory.specialist
+            )
+    if advisory_decision not in ("approve", "provided"):
         assert all(item.status == "unavailable" for item in result.advisories)
         assert any("entry-guidance" in limitation for limitation in result.response.limitations)
         assert all(not item.recommendations for item in result.advisories)
@@ -1010,3 +1023,53 @@ async def test_planning_review_does_not_repeat_place_records():
     ]
     assert result.response.recommendations == output.recommendations
     assert result.response.trip_options == output.trip_options
+
+
+@pytest.mark.parametrize("age_hours", [0, 2, 25])
+async def test_planning_advisories_preserve_provider_warnings_and_expiry(age_hours):
+    from datetime import timedelta
+
+    from roamie_agents.contracts import EntryDetails, Evidence, WeatherDetails, project
+
+    now = datetime.now(UTC)
+    weather = Evidence(
+        id="forecast",
+        name="Weather coverage",
+        category=Specialist.WEATHER,
+        observed_at=now - timedelta(hours=age_hours),
+        source_url="https://example.org/weather",
+        weather=WeatherDetails(
+            coverage="partial",
+            missing_dates=("2026-10-24",),
+            suggestions=("Recheck before departure",),
+        ),
+    )
+    entry = Evidence(
+        id="entry",
+        name="Official guidance",
+        category=Specialist.ENTRY,
+        observed_at=now - timedelta(hours=age_hours),
+        source_url="https://example.org/entry",
+        entry=EntryDetails(missing_information=("passport_country",)),
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: pytest.fail("Unexpected worker call"))
+    ) as http:
+        manager = PersonalTripManager(
+            workers={},
+            client=A2AWorkerClient(api_key=SecretStr("fixture"), timeout=5, client=http),
+            supervisor=reviewer(),
+            identity_key=SecretStr("a" * 32),
+            delegation_key=SecretStr("d" * 32),
+            clock=lambda: now,
+        )
+        result = await manager._planning_advisories(
+            Profile(subject="user", trip_id="trip", revision="1"),
+            lambda: "1",
+            RecommendationRequest(prompt="Plan", plan_options=True),
+            [weather, entry],
+        )
+    for advisory, fact, ttl in zip(result, [weather, entry], [1, 24], strict=True):
+        assert advisory.status == ("ok" if age_hours <= ttl else "unavailable")
+        assert advisory.recommendations == ((project(fact, None),) if age_hours <= ttl else ())
+        assert advisory.run_id is None

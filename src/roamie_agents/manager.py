@@ -244,6 +244,31 @@ class PersonalTripManager:
         request: RecommendationRequest,
         facts: Sequence[Evidence],
     ) -> list[TravelResponse]:
+        if request.plan_options:
+            now = self._clock()
+            advisories = []
+            for kind in (Specialist.WEATHER, Specialist.ENTRY):
+                supporting = [
+                    fact for fact in facts if TravelService._eligible(fact, kind, request, now)
+                ]
+                advisories.append(
+                    TravelResponse(
+                        specialist=kind,
+                        status="ok" if supporting else "unavailable",
+                        recommendations=tuple(project(fact, request.origin) for fact in supporting),
+                        limitations=(
+                            "Provider preparation evidence; included in the final trip review. "
+                            "Forecast gaps and unverified entry requirements remain unverified."
+                            if supporting
+                            else (
+                                "No current preparation evidence. "
+                                "Consult official sources before booking."
+                            ),
+                        ),
+                    )
+                )
+            return advisories
+
         async def check(kind: Specialist) -> TravelResponse:
             supporting = [fact for fact in facts if fact.category == kind]
             if not supporting:
