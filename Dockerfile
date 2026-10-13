@@ -66,7 +66,7 @@ FROM ${RUST_IMAGE} AS manager-temporal-builder
 COPY --from=uv /uv /bin/uv
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
-       build-essential protobuf-compiler pkg-config python3-dev \
+       build-essential protobuf-compiler libprotobuf-dev pkg-config python3-dev \
     && rm -rf /var/lib/apt/lists/*
 COPY docker/manager/build-requirements.txt /tmp/build-requirements.txt
 RUN uv venv --python /usr/bin/python3 /opt/build-tools \
