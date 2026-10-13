@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import secrets
 from typing import Annotated, Literal
 
 from pydantic import Field, ValidationError
@@ -63,7 +64,7 @@ class MCPSource:
                             },
                         ),
                     },
-                    meta={},
+                    meta={"idempotency-key": secrets.token_hex(16)},
                     timeout_seconds=25,
                 )
                 if result.is_error or result.structured_content is None:

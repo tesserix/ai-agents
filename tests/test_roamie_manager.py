@@ -704,6 +704,15 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(
     assert {fact["category"] for fact in final_context["evidence"]} == {
         kind.value for kind in kinds
     }
+    if planning:
+        for review, advisory in zip(
+            final_context["planning_checks"], result.advisories, strict=True
+        ):
+            assert review["recommendations"] == [item.id for item in advisory.recommendations]
+            assert all(
+                key in {fact["id"] for fact in final_context["evidence"]}
+                for key in review["recommendations"]
+            )
     assert set(called) == (set(kinds) if advisory_decision != "amend" else {Specialist.TRIP})
     if advisory_decision != "approve":
         assert all(item.status == "unavailable" for item in result.advisories)
@@ -988,5 +997,16 @@ async def test_planning_review_does_not_repeat_place_records():
     assert '"source_url": "https://maps.google.com/place"' in postflight
     assert '"budget_minor": 8000' in preflight and '"budget_minor": 8000' in postflight
     assert '"recommendations": ["museum"]' in postflight
+    reviewed_answer = json.loads(postflight.split("\n\nANSWER", 1)[1].split(":\n", 1)[1])
+    assert [option["budget"]["total_minor"] for option in reviewed_answer["trip_options"]] == [
+        2000,
+        4000,
+        6000,
+    ]
+    assert [option["remaining_budget_minor"] for option in reviewed_answer["trip_options"]] == [
+        6000,
+        4000,
+        2000,
+    ]
     assert result.response.recommendations == output.recommendations
     assert result.response.trip_options == output.trip_options

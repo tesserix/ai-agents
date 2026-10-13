@@ -83,6 +83,10 @@ class PlanSelection(Contract):
     options: Annotated[tuple[TripOption, ...], Field(min_length=3, max_length=3)]
 
 
+class BudgetRepair(Contract):
+    budgets: Annotated[tuple[PlanningBudget, ...], Field(min_length=3, max_length=3)]
+
+
 def validate_options(
     options: tuple[TripOption, ...],
     *,
@@ -93,6 +97,7 @@ def validate_options(
     destinations: list[str] | None = None,
     evidence_destinations: dict[str, str | None] | None = None,
     locations: Mapping[str, Location] | None = None,
+    validate_budgets: bool = True,
 ) -> None:
     places = locations or {}
     if start is None or end is None or not 0 <= (end - start).days < 14:
@@ -103,7 +108,7 @@ def validate_options(
     previous = -1
     for option in options:
         total = option.budget.total_minor
-        if total <= previous or (ceiling is not None and total > ceiling):
+        if validate_budgets and (total <= previous or (ceiling is not None and total > ceiling)):
             raise ValueError("invalid_budget_tiers")
         previous = total
         if [day.date for day in option.days] != dates:

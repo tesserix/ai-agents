@@ -488,13 +488,24 @@ class PersonalTripManager:
         review_context["planning_checks"] = [item.model_dump(mode="json") for item in advisories]
         review_answer = response.model_dump(mode="json")
         if bounded.plan_options:
+            for review, advisory in zip(review_context["planning_checks"], advisories, strict=True):
+                review["recommendations"] = [item.id for item in advisory.recommendations]
             review_context["evidence"] = [
-                fact.model_dump(mode="json")
+                fact.model_dump(mode="json", exclude_none=True)
                 for fact in candidates
                 if fact.id in {item.id for item in response.recommendations}
                 or fact.category in (Specialist.WEATHER, Specialist.ENTRY)
             ]
             review_answer["recommendations"] = [item.id for item in response.recommendations]
+            for reviewed_option, option in zip(
+                review_answer["trip_options"], response.trip_options, strict=True
+            ):
+                reviewed_option["budget"]["total_minor"] = option.budget.total_minor
+                reviewed_option["remaining_budget_minor"] = (
+                    bounded.budget_minor - option.budget.total_minor
+                    if bounded.budget_minor is not None
+                    else None
+                )
         context = json.dumps(review_context)
         if len(context.encode()) > 40000:
             raise TravelFailure("context_too_large")

@@ -3,9 +3,10 @@ from collections.abc import AsyncIterator
 from datetime import timedelta
 
 import httpx
+from tesserix_adk.adapters.mcp_resilience import ResilientSession
 from tesserix_adk.adapters.mcp_transport import HttpTransport, TransportSession
 from tesserix_adk.core import ModelCapabilities
-from tesserix_adk.core.config import McpServerConfig
+from tesserix_adk.core.config import McpServerConfig, RetryConfig
 from tesserix_adk.models.providers import OpenAICompatibleProvider
 
 from roamie_agents.api import Source
@@ -66,6 +67,7 @@ async def source_session(
         max_message_bytes=131072,
         read_timeout_seconds=25,
         timeout_seconds=25,
+        retry=RetryConfig(max_attempts=2, base_delay_seconds=0.1, max_delay_seconds=0.1),
     )
     async with (
         httpx.AsyncClient(
@@ -86,7 +88,7 @@ async def source_session(
         try:
             yield PlanningSources(
                 MCPSource(
-                    session=session,
+                    session=ResilientSession(session, config=config),
                     tool_name=settings.mcp_tool,
                     schema_digest=settings.mcp_schema_digest,
                 ),

@@ -204,12 +204,14 @@ async def test_trip_evidence_searches_start_together_before_any_finishes():
     from roamie_agents.contracts import Specialist
 
     started = set()
+    preferences = []
     first = asyncio.Event()
     finish = asyncio.Event()
 
     class Source:
         async def search(self, specialist, request):
             started.add(specialist)
+            preferences.append(request.preferences)
             first.set()
             await finish.wait()
             return EvidenceBatch(status="unavailable")
@@ -233,7 +235,15 @@ async def test_trip_evidence_searches_start_together_before_any_finishes():
             profile_authority=authority,
             clock=lambda: 1000,
         )
-        raw = snapshot(specialist="trip-planner")
+        raw = snapshot(
+            specialist="trip-planner",
+            profile={
+                "subject": "user",
+                "trip_id": "trip",
+                "revision": "1",
+                "preferences": ["gardens"],
+            },
+        )
         headers = {
             "Authorization": "Bearer " + "a" * 32,
             "X-Roamie-Gateway-Token": "fixture",
@@ -251,6 +261,7 @@ async def test_trip_evidence_searches_start_together_before_any_finishes():
                 asyncio.get_running_loop().call_soon(checkpoint.set)
                 await checkpoint.wait()
                 assert started == {Specialist.TRIP, Specialist.WEATHER, Specialist.ENTRY}
+                assert preferences == [("gardens",)] * 3
             finally:
                 finish.set()
                 response = await task

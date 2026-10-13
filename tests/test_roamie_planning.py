@@ -259,19 +259,28 @@ def test_validation_rejects_plans_that_skip_distance_transit():
         )
 
 
-async def test_invalid_budget_draft_is_repaired_once_within_the_same_run():
+async def test_invalid_budget_is_repaired_without_regenerating_the_itinerary():
     import json
 
     invalid = proposal()
     invalid["options"][2]["budget"]["food_minor"] = 10000
     provider = ScriptedProvider(
-        ModelResponse(content=json.dumps(invalid)), ModelResponse(content=json.dumps(proposal()))
+        ModelResponse(content=json.dumps(invalid)),
+        ModelResponse(
+            content=json.dumps({"budgets": [o["budget"] for o in proposal()["options"]]})
+        ),
     )
     result = await TravelService(provider=provider, clock=lambda: NOW).recommend(
         Specialist.TRIP, request(), facts=[evidence()]
     )
     assert [option.budget.total_minor for option in result.trip_options] == [2000, 4000, 6000]
     assert len(provider.requests) == 2
+    repair = json.loads(provider.requests[1].messages[-1].content[0].text)
+    assert repair["ceiling_minor"] == 8000
+    assert repair["currency"] == "AUD"
+    assert "EVIDENCE" not in repair
+    assert "days" not in repair["options"][0]
+    assert [option.days for option in result.trip_options] == [result.trip_options[0].days] * 3
 
 
 async def test_invalid_budget_draft_stops_after_one_failed_repair():
@@ -323,3 +332,54 @@ async def test_planner_evidence_omits_null_fields_without_losing_source_data():
     assert "cost_minor" not in sent
     sent["id"] = evidence().id
     assert Evidence.model_validate(sent) == evidence()
+
+
+async def test_budget_repair_cannot_return_an_over_budget_plan():
+    import json
+
+    invalid = proposal()
+    invalid["options"][2]["budget"]["food_minor"] = 10000
+    provider = ScriptedProvider(
+        ModelResponse(content=json.dumps(invalid)),
+        ModelResponse(content=json.dumps({"budgets": [o["budget"] for o in invalid["options"]]})),
+    )
+    with pytest.raises(TravelFailure, match="invalid_budget_tiers"):
+        await TravelService(provider=provider, clock=lambda: NOW).recommend(
+            Specialist.TRIP, request(), facts=[evidence()]
+        )
+    assert len(provider.requests) == 2
+
+
+async def test_budget_repair_does_not_add_a_third_model_call_after_grounding_repair():
+    import json
+
+    ungrounded = proposal()
+    ungrounded["options"][0]["days"][0]["stops"][0]["evidence_id"] = "invented"
+    over_budget = proposal()
+    over_budget["options"][2]["budget"]["food_minor"] = 10000
+    provider = ScriptedProvider(
+        ModelResponse(content=json.dumps(ungrounded)),
+        ModelResponse(content=json.dumps(over_budget)),
+    )
+    with pytest.raises(TravelFailure, match="invalid_budget_tiers"):
+        await TravelService(provider=provider, clock=lambda: NOW).recommend(
+            Specialist.TRIP, request(), facts=[evidence()]
+        )
+    assert len(provider.requests) == 2
+
+
+async def test_planner_receives_independent_tier_targets_below_the_party_ceiling():
+    import json
+
+    provider = ScriptedProvider(ModelResponse(content=json.dumps(proposal())))
+    await TravelService(provider=provider, clock=lambda: NOW).recommend(
+        Specialist.TRIP, request(), facts=[evidence()]
+    )
+    prompt = json.loads(provider.requests[0].messages[-1].content[0].text)
+    assert prompt["BUDGET"]["maximum_total_per_option_minor"] == 8000
+    assert prompt["BUDGET"]["suggested_totals_minor"] == {
+        "budget": 4800,
+        "balanced": 6400,
+        "premium": 7600,
+    }
+    assert prompt["BUDGET"]["minor_units_per_major_unit"] == 100

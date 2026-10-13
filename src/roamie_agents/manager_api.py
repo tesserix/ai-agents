@@ -21,7 +21,6 @@ from roamie_agents.manager import (
     PlanningDetailsRequired,
     Profile,
     effective_request,
-    planning_dates,
     require_planning_details,
 )
 from roamie_agents.runtime import TravelFailure
@@ -126,9 +125,7 @@ def create_manager_app(
             if snapshot.request.plan_options:
                 require_planning_details(effective_request(snapshot.profile, snapshot.request))
             async with asynccontextmanager(sources)(gateway_token) as source:
-                search_request = snapshot.request.model_copy(
-                    update=planning_dates(snapshot.profile, snapshot.request)
-                )
+                search_request = effective_request(snapshot.profile, snapshot.request)
                 if snapshot.specialist == Specialist.TRIP:
                     try:
                         async with asyncio.TaskGroup() as group:
