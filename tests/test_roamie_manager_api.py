@@ -86,10 +86,16 @@ async def test_signed_profile_boundary_fails_closed(raw, authorization, delegate
 
 
 @pytest.mark.parametrize(
-    "reason,expected",
-    [("model_failed", "model_failed"), ("sensitive upstream detail", "unclassified")],
+    "reason,expected,status",
+    [
+        ("model_failed", "model_failed", 503),
+        ("sensitive upstream detail", "unclassified", 503),
+        ("response_not_approved", "response_not_approved", 422),
+        ("request_requires_clarification", "request_requires_clarification", 422),
+        ("profile_changed", "profile_changed", 409),
+    ],
 )
-async def test_provider_failure_returns_unavailable_without_exposing_error(reason, expected):
+async def test_failure_distinguishes_terminal_review_from_unavailability(reason, expected, status):
     from structlog.testing import capture_logs
 
     from roamie_agents.runtime import TravelFailure
@@ -131,7 +137,7 @@ async def test_provider_failure_returns_unavailable_without_exposing_error(reaso
                         ).hexdigest(),
                     },
                 )
-        assert result.status_code == 503
+        assert result.status_code == status
         assert "sensitive" not in result.text
 
         failure = next(event for event in logs if event["event"] == "roamie_request_failed")
