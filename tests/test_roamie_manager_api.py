@@ -196,3 +196,120 @@ async def test_incomplete_trip_plan_returns_questions_without_searching_provider
     assert detail["reason"] == "planning_details_required"
     assert [q["topic"] for q in detail["questions"] if q["required"]] == ["dates", "budget"]
     assert searched == []
+
+
+async def test_trip_evidence_searches_start_together_before_any_finishes():
+    import asyncio
+
+    from roamie_agents.contracts import Specialist
+
+    started = set()
+    first = asyncio.Event()
+    finish = asyncio.Event()
+
+    class Source:
+        async def search(self, specialist, request):
+            started.add(specialist)
+            first.set()
+            await finish.wait()
+            return EvidenceBatch(status="unavailable")
+
+    async def sources(token):
+        yield Source()
+
+    async with httpx.AsyncClient() as worker_http:
+        manager = PersonalTripManager(
+            workers={},
+            client=A2AWorkerClient(api_key=SecretStr("a" * 32), timeout=5, client=worker_http),
+            supervisor=SupervisorService(provider=ScriptedProvider()),
+            delegation_key=SecretStr("d" * 32),
+            identity_key=SecretStr("c" * 32),
+        )
+        app = create_manager_app(
+            manager=manager,
+            sources=sources,
+            api_key=SecretStr("a" * 32),
+            profile_signing_key=SecretStr("b" * 32),
+            profile_authority=authority,
+            clock=lambda: 1000,
+        )
+        raw = snapshot(specialist="trip-planner")
+        headers = {
+            "Authorization": "Bearer " + "a" * 32,
+            "X-Roamie-Gateway-Token": "fixture",
+            "X-Roamie-Profile-Signature": hmac.new(b"b" * 32, raw, hashlib.sha256).hexdigest(),
+        }
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            task = asyncio.create_task(
+                client.post("/v1/trip-manager", content=raw, headers=headers)
+            )
+            try:
+                await asyncio.wait_for(first.wait(), timeout=1)
+                checkpoint = asyncio.Event()
+                asyncio.get_running_loop().call_soon(checkpoint.set)
+                await checkpoint.wait()
+                assert started == {Specialist.TRIP, Specialist.WEATHER, Specialist.ENTRY}
+            finally:
+                finish.set()
+                response = await task
+            assert response.status_code == 503
+
+
+async def test_failed_trip_evidence_cancels_other_searches_and_returns_503():
+    import asyncio
+
+    from roamie_agents.contracts import Specialist
+    from roamie_agents.runtime import TravelFailure
+
+    started = set()
+    cancelled = set()
+    ready = asyncio.Event()
+
+    class Source:
+        async def search(self, specialist, request):
+            started.add(specialist)
+            if len(started) == 3:
+                ready.set()
+            await ready.wait()
+            if specialist == Specialist.TRIP:
+                raise TravelFailure("provider_unavailable")
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancelled.add(specialist)
+                raise
+
+    async def sources(token):
+        yield Source()
+
+    async with httpx.AsyncClient() as worker_http:
+        manager = PersonalTripManager(
+            workers={},
+            client=A2AWorkerClient(api_key=SecretStr("a" * 32), timeout=5, client=worker_http),
+            supervisor=SupervisorService(provider=ScriptedProvider()),
+            delegation_key=SecretStr("d" * 32),
+            identity_key=SecretStr("c" * 32),
+        )
+        app = create_manager_app(
+            manager=manager,
+            sources=sources,
+            api_key=SecretStr("a" * 32),
+            profile_signing_key=SecretStr("b" * 32),
+            profile_authority=authority,
+            clock=lambda: 1000,
+        )
+        raw = snapshot(specialist="trip-planner")
+        headers = {
+            "Authorization": "Bearer " + "a" * 32,
+            "X-Roamie-Gateway-Token": "fixture",
+            "X-Roamie-Profile-Signature": hmac.new(b"b" * 32, raw, hashlib.sha256).hexdigest(),
+        }
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            async with asyncio.timeout(1):
+                response = await client.post("/v1/trip-manager", content=raw, headers=headers)
+    assert response.status_code == 503
+    assert cancelled == {Specialist.WEATHER, Specialist.ENTRY}

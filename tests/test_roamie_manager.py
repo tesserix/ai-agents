@@ -696,7 +696,9 @@ async def test_trip_consults_weather_and_entry_before_itinerary_review(
     preflight_context = json.loads(
         preflight_text.split("CONTEXT:\n", 1)[1].split("\n\nPROPOSED REQUEST", 1)[0]
     )
-    assert {fact["category"] for fact in preflight_context["evidence"]} == {"trip-planner"}
+    assert {fact["category"] for fact in preflight_context["evidence"]} == (
+        set() if planning else {"trip-planner"}
+    )
     final_text = "".join(part.text for part in model.requests[-1].messages[-1].content)
     final_context = json.loads(final_text.split("CONTEXT:\n", 1)[1].split("\n\nANSWER", 1)[0])
     assert {fact["category"] for fact in final_context["evidence"]} == {
@@ -911,3 +913,80 @@ def test_complete_brief_only_suggests_follow_up_questions():
     ]
     detailed = vague.model_copy(update={"preferences": ("Street food", "Relaxed pace")})
     assert require_planning_details(effective_request(profile, detailed)) == ()
+
+
+async def test_planning_review_does_not_repeat_place_records():
+    from roamie_agents.contracts import project
+    from roamie_agents.planning import PlanSelection
+    from test_roamie_planning import evidence, proposal
+
+    fact = evidence()
+    unused = fact.model_copy(update={"id": "unused", "name": "Unused alternative"})
+    output = TravelResponse(
+        status="ok",
+        specialist=Specialist.TRIP,
+        recommendations=(project(fact, None),),
+        trip_options=PlanSelection.model_validate(proposal()).options,
+    )
+    verdict = ModelResponse(
+        content=json.dumps(
+            {"decision": "approve", "confidence": 1, "summary": "Reviewed", "issues": []}
+        )
+    )
+    provider = ScriptedProvider(verdict, verdict)
+
+    def reply(request):
+        return httpx.Response(
+            200,
+            json={
+                "jsonrpc": "2.0",
+                "id": json.loads(request.content)["id"],
+                "result": {
+                    "status": {"state": "completed"},
+                    "artifacts": [
+                        {"parts": [{"kind": "text", "text": signed_reply(request, output)}]}
+                    ],
+                },
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as client:
+        manager = PersonalTripManager(
+            workers={
+                Specialist.TRIP: WorkerEndpoint(
+                    name="roamie-trip-planner",
+                    url="https://gateway.example.org/a2a/v1/roamie-trip-planner",
+                )
+            },
+            client=A2AWorkerClient(api_key=SecretStr("fixture"), timeout=5, client=client),
+            supervisor=SupervisorService(provider=provider, definition=manager_definition()),
+            delegation_key=SecretStr("d" * 32),
+            identity_key=SecretStr("a" * 32),
+            clock=lambda: fact.observed_at,
+        )
+        result = await manager.manage(
+            profile=Profile(
+                subject="user", trip_id="trip", revision="1", currency="AUD", budget_minor=8000
+            ),
+            current_revision=lambda: "1",
+            specialist=Specialist.TRIP,
+            request=RecommendationRequest(
+                prompt="Plan Hanoi",
+                destination="Hanoi",
+                plan_options=True,
+                start_date="2026-10-01",
+                end_date="2026-10-01",
+                currency="AUD",
+            ),
+            facts=[fact, unused],
+        )
+    preflight = "".join(part.text for part in provider.requests[0].messages[-1].content)
+    postflight = "".join(part.text for part in provider.requests[1].messages[-1].content)
+    assert '"name": "Museum"' not in preflight
+    assert postflight.count('"name": "Museum"') == 1
+    assert "Unused alternative" not in postflight
+    assert '"source_url": "https://maps.google.com/place"' in postflight
+    assert '"budget_minor": 8000' in preflight and '"budget_minor": 8000' in postflight
+    assert '"recommendations": ["museum"]' in postflight
+    assert result.response.recommendations == output.recommendations
+    assert result.response.trip_options == output.trip_options

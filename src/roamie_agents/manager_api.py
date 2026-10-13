@@ -129,18 +129,24 @@ def create_manager_app(
                 search_request = snapshot.request.model_copy(
                     update=planning_dates(snapshot.profile, snapshot.request)
                 )
-                batch = await source.search(snapshot.specialist, search_request)
                 if snapshot.specialist == Specialist.TRIP:
-                    checks = await asyncio.gather(
-                        *(
-                            source.search(kind, search_request)
-                            for kind in (Specialist.WEATHER, Specialist.ENTRY)
-                        )
-                    )
+                    try:
+                        async with asyncio.TaskGroup() as group:
+                            trip = group.create_task(source.search(Specialist.TRIP, search_request))
+                            checks_tasks = [
+                                group.create_task(source.search(kind, search_request))
+                                for kind in (Specialist.WEATHER, Specialist.ENTRY)
+                            ]
+                    except* (TravelFailure, TimeoutError) as errors:
+                        raise TravelFailure("provider_unavailable") from errors
+                    batch = trip.result()
+                    checks = [task.result() for task in checks_tasks]
                     extra = [fact for check in checks for fact in check.facts]
                     batch = batch.model_copy(
                         update={"facts": [*batch.facts[: 40 - len(extra)], *extra]}
                     )
+                else:
+                    batch = await source.search(snapshot.specialist, search_request)
             if batch.status != "ok":
                 raise HTTPException(503, "provider evidence unavailable")
             result = await manager.manage(
