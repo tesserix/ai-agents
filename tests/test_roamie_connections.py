@@ -68,7 +68,23 @@ async def test_roamie_model_uses_only_model_gateway_credential():
 
 
 @pytest.mark.parametrize("stateful", [False, True])
-async def test_adk_mcp_session_discovers_and_calls_only_pinned_gateway_tool(stateful):
+@pytest.mark.parametrize(
+    "fail_at,status,failures",
+    [
+        (None, 200, 0),
+        ("initialize", 500, 1),
+        ("tools/list", 500, 1),
+        ("tools/call", 500, 1),
+        ("tools/call", 500, 2),
+        ("tools/call", 403, 1),
+    ],
+)
+async def test_adk_mcp_session_discovers_and_calls_only_pinned_gateway_tool(
+    stateful, fail_at, status, failures, monkeypatch
+):
+    from tesserix_adk.testing import FakeClock
+
+    monkeypatch.setattr("tesserix_adk.adapters.mcp_resilience.SystemClock", FakeClock)
     contract = json.loads(await asyncio.to_thread(Path("contracts/roamie-travel.json").read_text))
     shape = {key: contract[key] for key in ("input", "output")}
     digest = hashlib.sha256(
@@ -79,6 +95,8 @@ async def test_adk_mcp_session_discovers_and_calls_only_pinned_gateway_tool(stat
     def reply(request):
         body = json.loads(request.content)
         calls.append(body["method"])
+        if body["method"] == fail_at and calls.count(fail_at) <= failures:
+            return httpx.Response(status)
         assert request.url.host == "mcp.tesserix.app"
         assert request.headers["authorization"] == "Bearer delegated"
         if stateful and body["method"] != "initialize":
@@ -118,9 +136,17 @@ async def test_adk_mcp_session_discovers_and_calls_only_pinned_gateway_tool(stat
     async with asynccontextmanager(source_session)(
         settings(mcp_schema_digest=digest), "delegated", transport=httpx.MockTransport(reply)
     ) as source:
-        batch = await source.search(Specialist.FOOD, RecommendationRequest(prompt="Dinner"))
-    assert batch.status == "unavailable"
+        if failures == 2 or status == 403:
+            from roamie_agents.runtime import TravelFailure
+
+            with pytest.raises(TravelFailure, match="provider_unavailable"):
+                await source.search(Specialist.FOOD, RecommendationRequest(prompt="Dinner"))
+        else:
+            batch = await source.search(Specialist.FOOD, RecommendationRequest(prompt="Dinner"))
+            assert batch.status == "unavailable"
     assert calls[-1] == "tools/call"
+    if fail_at:
+        assert calls.count(fail_at) == (1 if status == 403 else 2)
 
 
 @pytest.mark.parametrize(
