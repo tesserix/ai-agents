@@ -129,8 +129,13 @@ async def test_invalid_plan_cannot_reach_the_manager(change):
     service = TravelService(
         provider=ScriptedProvider(ModelResponse(content=json.dumps(value))), clock=lambda: NOW
     )
-    with pytest.raises(TravelFailure):
-        await service.recommend(Specialist.TRIP, request(), facts=[evidence()])
+    if change == "over_budget":
+        result = await service.recommend(Specialist.TRIP, request(), facts=[evidence()])
+        assert all(option.budget.total_minor <= 8000 for option in result.trip_options)
+        assert any("resized" in item for item in result.limitations)
+    else:
+        with pytest.raises(TravelFailure):
+            await service.recommend(Specialist.TRIP, request(), facts=[evidence()])
 
 
 def test_plan_survives_signed_wire_roundtrip_without_trusting_a_total():
@@ -259,41 +264,34 @@ def test_validation_rejects_plans_that_skip_distance_transit():
         )
 
 
-async def test_invalid_budget_is_repaired_without_regenerating_the_itinerary():
+async def test_invalid_budget_is_resized_without_regenerating_the_itinerary():
     import json
 
     invalid = proposal()
     invalid["options"][2]["budget"]["food_minor"] = 10000
-    provider = ScriptedProvider(
-        ModelResponse(content=json.dumps(invalid)),
-        ModelResponse(
-            content=json.dumps({"budgets": [o["budget"] for o in proposal()["options"]]})
-        ),
-    )
+    provider = ScriptedProvider(ModelResponse(content=json.dumps(invalid)))
     result = await TravelService(provider=provider, clock=lambda: NOW).recommend(
         Specialist.TRIP, request(), facts=[evidence()]
     )
-    assert [option.budget.total_minor for option in result.trip_options] == [2000, 4000, 6000]
-    assert len(provider.requests) == 2
-    repair = json.loads(provider.requests[1].messages[-1].content[0].text)
-    assert repair["ceiling_minor"] == 8000
-    assert repair["currency"] == "AUD"
-    assert "EVIDENCE" not in repair
-    assert "days" not in repair["options"][0]
+    assert [option.budget.total_minor for option in result.trip_options] == [2000, 4000, 7600]
+    assert len(provider.requests) == 1
     assert [option.days for option in result.trip_options] == [result.trip_options[0].days] * 3
+    assert result.trip_options[2].budget.contingency_minor >= 760
+    assert any("resized" in item for item in result.limitations)
 
 
-async def test_invalid_budget_draft_stops_after_one_failed_repair():
+async def test_empty_budget_allocations_are_rejected_without_extra_model_calls():
     import json
 
     invalid = proposal()
-    invalid["options"][2]["budget"]["food_minor"] = 10000
-    provider = ScriptedProvider(*[ModelResponse(content=json.dumps(invalid)) for _ in range(3)])
-    with pytest.raises(TravelFailure):
+    for option in invalid["options"]:
+        option["budget"] = dict.fromkeys(option["budget"], 0)
+    provider = ScriptedProvider(ModelResponse(content=json.dumps(invalid)))
+    with pytest.raises(TravelFailure, match="invalid_budget_allocation"):
         await TravelService(provider=provider, clock=lambda: NOW).recommend(
             Specialist.TRIP, request(), facts=[evidence()]
         )
-    assert len(provider.requests) == 2
+    assert len(provider.requests) == 1
 
 
 async def test_planning_deadline_cancels_a_stuck_model_call(monkeypatch):
@@ -334,23 +332,25 @@ async def test_planner_evidence_omits_null_fields_without_losing_source_data():
     assert Evidence.model_validate(sent) == evidence()
 
 
-async def test_budget_repair_cannot_return_an_over_budget_plan():
+@pytest.mark.parametrize("ceiling", [101, 8000, 1000000000000])
+async def test_resized_allocations_have_exact_ordered_totals_within_ceiling(ceiling):
     import json
 
     invalid = proposal()
-    invalid["options"][2]["budget"]["food_minor"] = 10000
-    provider = ScriptedProvider(
-        ModelResponse(content=json.dumps(invalid)),
-        ModelResponse(content=json.dumps({"budgets": [o["budget"] for o in invalid["options"]]})),
+    for option in invalid["options"]:
+        option["budget"]["accommodation_minor"] = 1000000000000
+    provider = ScriptedProvider(ModelResponse(content=json.dumps(invalid)))
+    result = await TravelService(provider=provider, clock=lambda: NOW).recommend(
+        Specialist.TRIP, request().model_copy(update={"budget_minor": ceiling}), facts=[evidence()]
     )
-    with pytest.raises(TravelFailure, match="invalid_budget_tiers"):
-        await TravelService(provider=provider, clock=lambda: NOW).recommend(
-            Specialist.TRIP, request(), facts=[evidence()]
-        )
-    assert len(provider.requests) == 2
+    assert [o.budget.total_minor for o in result.trip_options] == [
+        ceiling * percent // 100 for percent in (60, 80, 95)
+    ]
+    assert len(provider.requests) == 1
+    assert all(o.budget.contingency_minor * 10 >= o.budget.total_minor for o in result.trip_options)
 
 
-async def test_budget_repair_does_not_add_a_third_model_call_after_grounding_repair():
+async def test_budget_resize_succeeds_after_grounding_repair_without_a_third_call():
     import json
 
     ungrounded = proposal()
@@ -361,11 +361,14 @@ async def test_budget_repair_does_not_add_a_third_model_call_after_grounding_rep
         ModelResponse(content=json.dumps(ungrounded)),
         ModelResponse(content=json.dumps(over_budget)),
     )
-    with pytest.raises(TravelFailure, match="invalid_budget_tiers"):
-        await TravelService(provider=provider, clock=lambda: NOW).recommend(
-            Specialist.TRIP, request(), facts=[evidence()]
-        )
+    result = await TravelService(provider=provider, clock=lambda: NOW).recommend(
+        Specialist.TRIP, request(), facts=[evidence()]
+    )
     assert len(provider.requests) == 2
+    assert [o.budget.total_minor for o in result.trip_options] == [2000, 4000, 7600]
+    assert all(
+        s.evidence_id == "museum" for o in result.trip_options for d in o.days for s in d.stops
+    )
 
 
 async def test_planner_receives_independent_tier_targets_below_the_party_ceiling():
@@ -383,3 +386,19 @@ async def test_planner_receives_independent_tier_targets_below_the_party_ceiling
         "premium": 7600,
     }
     assert prompt["BUDGET"]["minor_units_per_major_unit"] == 100
+
+
+@pytest.mark.parametrize("ceiling", [None, 0, 5])
+async def test_invalid_allocations_cannot_be_resized_without_a_usable_ceiling(ceiling):
+    import json
+
+    invalid = proposal()
+    invalid["options"][0]["budget"]["food_minor"] = 10000
+    provider = ScriptedProvider(ModelResponse(content=json.dumps(invalid)))
+    with pytest.raises(TravelFailure, match="invalid_budget_allocation"):
+        await TravelService(provider=provider, clock=lambda: NOW).recommend(
+            Specialist.TRIP,
+            request().model_copy(update={"budget_minor": ceiling}),
+            facts=[evidence()],
+        )
+    assert len(provider.requests) == 1

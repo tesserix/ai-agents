@@ -83,8 +83,52 @@ class PlanSelection(Contract):
     options: Annotated[tuple[TripOption, ...], Field(min_length=3, max_length=3)]
 
 
-class BudgetRepair(Contract):
-    budgets: Annotated[tuple[PlanningBudget, ...], Field(min_length=3, max_length=3)]
+def fit_budget_allocations(
+    options: tuple[TripOption, ...], ceiling: int | None
+) -> tuple[TripOption, ...]:
+    targets = [ceiling * percent // 100 for percent in (60, 80, 95)] if ceiling else []
+    if len(options) != 3 or len(set(targets)) != 3 or not targets[0]:
+        raise ValueError("invalid_budget_allocation")
+    fitted: list[TripOption] = []
+    previous = 0
+    for option, limit in zip(options, targets, strict=True):
+        budget = option.budget
+        target = budget.total_minor if previous < budget.total_minor <= limit else limit
+        previous = target
+        if target == budget.total_minor:
+            fitted.append(option)
+            continue
+        weights = [
+            budget.accommodation_minor,
+            budget.food_minor,
+            budget.activities_minor,
+            budget.transport_minor,
+        ]
+        weight_total = sum(weights)
+        if not weight_total:
+            raise ValueError("invalid_budget_allocation")
+        contingency = max(
+            (target + 9) // 10, target * budget.contingency_minor // budget.total_minor
+        )
+        spending = target - contingency
+        costs = [spending * weight // weight_total for weight in weights]
+        ranked = sorted(range(4), key=lambda i: spending * weights[i] % weight_total, reverse=True)
+        for index in ranked[: spending - sum(costs)]:
+            costs[index] += 1
+        fitted.append(
+            option.model_copy(
+                update={
+                    "budget": PlanningBudget(
+                        accommodation_minor=costs[0],
+                        food_minor=costs[1],
+                        activities_minor=costs[2],
+                        transport_minor=costs[3],
+                        contingency_minor=contingency,
+                    )
+                }
+            )
+        )
+    return tuple(fitted)
 
 
 def validate_options(
