@@ -168,6 +168,16 @@ def create_manager_app(
             ) from error
         except (TravelFailure, TimeoutError) as error:
             record_failure("manager", error)
+            if str(error) == "profile_changed":
+                raise HTTPException(409, "travel preferences changed") from error
+            if str(error) in {
+                "response_not_approved",
+                "request_requires_clarification",
+                "photo_not_authorized",
+                "budget_currency_mismatch",
+                "dates_outside_trip",
+            }:
+                raise HTTPException(422, "trip manager review requires changes") from error
             raise HTTPException(503, "trip manager could not validate this response") from error
 
     return app
