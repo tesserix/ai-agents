@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.18
 ARG BASE_IMAGE=ghcr.io/tesserix/base-python-adk-3.14:20260926@sha256:14ec2e75d17a4207d1ae9d2600f3c33a609db33e9833c6be993ecc1525be56c9
 ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.12.5@sha256:e85be844203885286c60ffad8a858d48afb6c5a5c237ca0e67f12e74b8f174b1
+ARG MANAGER_RUNTIME_IMAGE=gcr.io/distroless/cc-debian13:nonroot@sha256:e792ab3d241a468a4fd7519ddbbebe66b49b5f365771716ea688ad40b6c6f1c2
 
 FROM ${UV_IMAGE} AS uv
 FROM ${BASE_IMAGE} AS builder
@@ -60,8 +61,25 @@ ENTRYPOINT ["uvicorn", "orchestrator_agent.main:app", "--host", "0.0.0.0", "--po
 FROM runtime-base AS roamie-runtime
 ENTRYPOINT ["uvicorn", "roamie_agents.main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
 
-FROM runtime-base AS roamie-manager-runtime
-ENTRYPOINT ["uvicorn", "roamie_agents.manager_main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
+FROM runtime-base AS manager-files
+USER root
+COPY scripts/export_manager_runtime.py /tmp/export_manager_runtime.py
+RUN /usr/local/bin/python /tmp/export_manager_runtime.py
+
+FROM ${MANAGER_RUNTIME_IMAGE} AS roamie-manager-runtime
+ENV VIRTUAL_ENV=/opt/adk-venv \
+    PATH=/opt/adk-venv/bin:/usr/local/bin:/usr/bin:/bin \
+    LD_LIBRARY_PATH=/usr/local/lib \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+COPY --from=manager-files /manager-root/ /
+COPY --from=manager-files /opt/adk-venv /opt/adk-venv
+WORKDIR /app
+USER 10001:10001
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD ["/opt/adk-venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)"]
+ENTRYPOINT ["/opt/adk-venv/bin/uvicorn", "roamie_agents.manager_main:app", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
 
 # Preserve the repository's original default for local `docker build` callers.
 FROM kora-runtime AS runtime
